@@ -151,7 +151,7 @@ function Lobby() {
                 value={joinInput}
                 onChange={(e) => setJoinInput(e.target.value.toUpperCase())}
                 onKeyDown={(e) => e.key === 'Enter' && handleJoinRoom()}
-                maxLength={20}
+                maxLength={60}
                 autoFocus
               />
               <button className="lobby-btn lobby-btn-join" onClick={handleJoinRoom}>
