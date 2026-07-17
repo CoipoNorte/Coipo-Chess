@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/coipo-chess/', // Cambia al nombre de tu repositorio en GitHub
+  base: '/coipo-chess/',
   build: {
     outDir: 'dist',
     sourcemap: false,
