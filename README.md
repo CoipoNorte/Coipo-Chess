@@ -1,4 +1,4 @@
-# ♟️ [Coipo Chess — Ajedrez Online](https://coipo-norte.github.io/coipo-chess)
+# ♟️ [Coipo Chess — Ajedrez Online](https://CoipoNorte.github.io/Coipo-Chess)
 
 **Coipo Chess** es una plataforma de ajedrez online que funciona **sin servidores propios**, usando conexiones peer-to-peer (P2P) vía **PeerJS** sobre WebRTC, con **Stockfish** como motor de IA integrado. Desplegable en **GitHub Pages** con un solo comando.
 
