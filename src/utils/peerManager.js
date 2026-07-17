@@ -20,7 +20,19 @@ class PeerManager {
   }
 
   normalizeId(id) {
-    return String(id || '').trim().toUpperCase();
+    return String(id || '').trim();
+  }
+
+  buildPeerIdCandidates(id) {
+    const normalized = this.normalizeId(id)
+    const candidates = [normalized]
+
+    if (normalized) {
+      candidates.push(normalized.toLowerCase())
+      candidates.push(normalized.toUpperCase())
+    }
+
+    return [...new Set(candidates.filter(Boolean))]
   }
 
   /**
@@ -56,26 +68,90 @@ class PeerManager {
    * @returns {Promise<void>}
    */
   joinRoom(hostId) {
-    const normalizedHostId = this.normalizeId(hostId);
+    const hostIdCandidates = this.buildPeerIdCandidates(hostId);
 
     return new Promise((resolve, reject) => {
       this.isHost = false;
       this._initPeer();
 
-      this.peer.on('open', () => {
-        const conn = this.peer.connect(normalizedHostId, {
-          reliable: true,
-          serialization: 'json',
-        });
+      let settled = false;
+      let attemptIndex = 0;
+      let retryCount = 0;
+      const maxRetries = 6;
 
-        this._handleConnection(conn);
-        resolve();
+      const resolveOnce = (value) => {
+        if (!settled) {
+          settled = true;
+          resolve(value);
+        }
+      };
+
+      const rejectOnce = (err) => {
+        if (!settled) {
+          settled = true;
+          this.onErrorCallback?.(err);
+          reject(err);
+        }
+      };
+
+      const tryNextConnection = () => {
+        if (settled) return;
+
+        const candidateId = hostIdCandidates[attemptIndex];
+        if (!candidateId) {
+          rejectOnce(new Error('No se pudo conectar a la sala. Verifica el código o espera a que el anfitrión esté listo.'));
+          return;
+        }
+
+        attemptIndex += 1;
+
+        try {
+          const conn = this.peer.connect(candidateId, {
+            reliable: true,
+            serialization: 'json',
+          });
+
+          this._handleConnection(conn);
+
+          conn.on('open', () => {
+            resolveOnce();
+          });
+
+          conn.on('error', (err) => {
+            const message = err?.message || '';
+            const shouldRetry = /could not connect|peer-unavailable|unavailable|network/i.test(message) || err?.type === 'peer-unavailable';
+
+            if (shouldRetry && retryCount < maxRetries) {
+              retryCount += 1;
+              conn.close();
+              window.setTimeout(() => {
+                tryNextConnection();
+              }, 1000 * retryCount);
+              return;
+            }
+
+            rejectOnce(err);
+          });
+        } catch (err) {
+          if (retryCount < maxRetries) {
+            retryCount += 1;
+            window.setTimeout(() => {
+              tryNextConnection();
+            }, 1000 * retryCount);
+            return;
+          }
+
+          rejectOnce(err);
+        }
+      };
+
+      this.peer.on('open', () => {
+        tryNextConnection();
       });
 
       this.peer.on('error', (err) => {
         console.error('PeerJS error:', err);
-        this.onErrorCallback?.(err);
-        reject(err);
+        rejectOnce(err);
       });
     });
   }
@@ -84,8 +160,18 @@ class PeerManager {
    * Inicializa la instancia de Peer
    */
   _initPeer() {
-    this.peer = new Peer(null, {
+    this.peer = new Peer(undefined, {
       debug: 2, // 0=off, 1=errors, 2=warnings, 3=all
+      host: '0.peerjs.com',
+      port: 443,
+      secure: true,
+      path: '/',
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:1934' },
+          { urls: 'stun:stun1.l.google.com:1934' },
+        ],
+      },
     });
   }
 

@@ -57,7 +57,7 @@ function Lobby() {
   }
 
   const handleJoinRoom = async (providedCode = null) => {
-    const code = (providedCode || joinInput).trim().toUpperCase()
+    const code = (providedCode || joinInput).trim()
     if (!code) { setError('Ingresa un código de sala'); return }
 
     setView('joining')
@@ -87,7 +87,7 @@ function Lobby() {
 
       pm.onError((err) => {
         setError(`Error: ${err.message || 'Código inválido'}`)
-        setView('join')
+        setView('select')
       })
     } catch (err) {
       setError(`Error: ${err.message}`)
@@ -97,7 +97,7 @@ function Lobby() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
-    const roomFromUrl = params.get('room')?.trim().toUpperCase()
+    const roomFromUrl = params.get('room')?.trim()
 
     if (!roomFromUrl || autoJoinAttemptedRef.current) return
 
