@@ -101,8 +101,7 @@ function Lobby() {
   }
 
   const modeName = isBlindMode ? 'Modo A Ciegas 🕶️' : 'Modo Online 👥';
-
-  const shareText = `♟️ ¡Juega ajedrez conmigo en ${modeName}!\n\nÚnete a mi sala en Coipo Chess:\n\n🔑 Código: ${roomId}\n\n▶️ Entra aquí: ${window.location.href}\n\nEspero tu movimiento! 🎮`;
+  const shareText = `♟️ ¡Juega ajedrez conmigo en ${modeName}!\n\nÚnete a mi partida haciendo clic aquí:\n\n${window.location.href}\n\n¡Espero tu movimiento! 🎮`;
 
   const handleShareWhatsApp = () => {
     window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
