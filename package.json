@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://coipo-norte.github.io/coipo-chess",
+  "homepage": "https://CoipoNorte.github.io/Coipo-Chess",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
