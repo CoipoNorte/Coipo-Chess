@@ -14,10 +14,10 @@ class PeerManager {
     this.myId = null;
     this.connected = false;
     this.opening = false;
-    this.onDataCallback = null;
-    this.onConnectedCallback = null;
-    this.onDisconnectedCallback = null;
-    this.onErrorCallback = null;
+    this.onDataCallbacks = [];
+    this.onConnectedCallbacks = [];
+    this.onDisconnectedCallbacks = [];
+    this.onErrorCallbacks = [];
   }
 
   normalizeId(id) {
@@ -60,7 +60,7 @@ class PeerManager {
       this.peer.on('error', (err) => {
         console.error('PeerJS error:', err);
         this.opening = false;
-        this.onErrorCallback?.(err);
+        this._triggerError(err);
         reject(err);
       });
     });
@@ -94,7 +94,7 @@ class PeerManager {
       const rejectOnce = (err) => {
         if (!settled) {
           settled = true;
-          this.onErrorCallback?.(err);
+          this._triggerError(err);
           reject(err);
         }
       };
@@ -158,6 +158,7 @@ class PeerManager {
       this.peer.on('error', (err) => {
         console.error('PeerJS error:', err);
         this.opening = false;
+        this._triggerError(err);
         rejectOnce(err);
       });
     });
@@ -195,16 +196,16 @@ class PeerManager {
 
     conn.on('open', () => {
       this.connected = true;
-      this.onConnectedCallback?.();
+      this._triggerConnected();
     });
 
     if (conn.open) {
       this.connected = true;
-      this.onConnectedCallback?.();
+      this._triggerConnected();
     }
 
     conn.on('data', (data) => {
-      this.onDataCallback?.(data);
+      this._triggerData(data);
     });
 
     conn.on('close', () => {
@@ -212,7 +213,7 @@ class PeerManager {
         this.connection = null;
       }
       this.connected = false;
-      this.onDisconnectedCallback?.();
+      this._triggerDisconnected();
     });
 
     conn.on('error', (err) => {
@@ -221,7 +222,7 @@ class PeerManager {
         this.connection = null;
       }
       this.connected = false;
-      this.onErrorCallback?.(err);
+      this._triggerError(err);
     });
   }
 
@@ -321,15 +322,31 @@ class PeerManager {
   /**
    * Callback para datos recibidos
    */
+  _triggerData(data) {
+    this.onDataCallbacks.forEach((callback) => callback(data));
+  }
+
+  _triggerConnected() {
+    this.onConnectedCallbacks.forEach((callback) => callback());
+  }
+
+  _triggerDisconnected() {
+    this.onDisconnectedCallbacks.forEach((callback) => callback());
+  }
+
+  _triggerError(err) {
+    this.onErrorCallbacks.forEach((callback) => callback(err));
+  }
+
   onData(callback) {
-    this.onDataCallback = callback;
+    this.onDataCallbacks.push(callback);
   }
 
   /**
    * Callback cuando se conecta un peer
    */
   onConnected(callback) {
-    this.onConnectedCallback = callback;
+    this.onConnectedCallbacks.push(callback);
     if (this.connection?.open) {
       callback();
     }
@@ -339,14 +356,14 @@ class PeerManager {
    * Callback cuando se desconecta
    */
   onDisconnected(callback) {
-    this.onDisconnectedCallback = callback;
+    this.onDisconnectedCallbacks.push(callback);
   }
 
   /**
    * Callback para errores
    */
   onError(callback) {
-    this.onErrorCallback = callback;
+    this.onErrorCallbacks.push(callback);
   }
 
   /**
