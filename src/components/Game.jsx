@@ -77,6 +77,11 @@ export default function Game() {
       if (!p) { nav('/'); return }
       pm.current = p; setPColor(pc); setMyTurn(pc === 'w')
       p.onData(d => peerData(d))
+      p.onDisconnected(() => {
+        setGoText('Se perdió la conexión con el rival')
+        setShowGO(true)
+        SFX.gameOver()
+      })
     } else if (vsPC && mode === 'pc-levels') setShowDiff(true)
     if (vsPC) { const a = new AIPlayer('medium'); ai.current = a; a.init().then(()=>setAiSt('SF')).catch(()=>setAiSt('local')) }
     engine.reset(); refresh()

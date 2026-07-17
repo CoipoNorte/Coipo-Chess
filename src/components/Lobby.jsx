@@ -18,10 +18,6 @@ function Lobby() {
 
   const isBlindMode = mode === 'blind'
 
-  useEffect(() => {
-    return () => peerRef.current?.disconnect()
-  }, [])
-
   const handleCreateRoom = async () => {
     setView('creating')
     setStatusMessage('Iniciando conexión...')
@@ -40,7 +36,7 @@ function Lobby() {
         setView('connected')
         setTimeout(() => {
           window.__coipoPeerManager = pm
-          window.__coipoRouteState = { playerColor: 'w', isHost: true, isBlindMode, roomId: id }
+          window.__coipoRouteState = { playerColor: 'w', isHost: true, isBlindMode, roomId: id, peerManager: pm }
           window.location.hash = `#/game/${mode}`
         }, 800)
       })
@@ -77,7 +73,7 @@ function Lobby() {
         setView('connected')
         setTimeout(() => {
           window.__coipoPeerManager = pm
-          window.__coipoRouteState = { playerColor: 'b', isHost: false, isBlindMode, roomId: code }
+          window.__coipoRouteState = { playerColor: 'b', isHost: false, isBlindMode, roomId: code, peerManager: pm }
           window.location.hash = `#/game/${mode}`
         }, 800)
       })

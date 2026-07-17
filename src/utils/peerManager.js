@@ -13,6 +13,7 @@ class PeerManager {
     this.isHost = false;
     this.myId = null;
     this.connected = false;
+    this.opening = false;
     this.onDataCallback = null;
     this.onConnectedCallback = null;
     this.onDisconnectedCallback = null;
@@ -42,11 +43,13 @@ class PeerManager {
   createRoom() {
     return new Promise((resolve, reject) => {
       this.isHost = true;
+      this.opening = true;
       this._initPeer();
 
       this.peer.on('open', (id) => {
         const normalizedId = this.normalizeId(id);
         this.myId = normalizedId;
+        this.opening = false;
         resolve(normalizedId);
       });
 
@@ -56,6 +59,7 @@ class PeerManager {
 
       this.peer.on('error', (err) => {
         console.error('PeerJS error:', err);
+        this.opening = false;
         this.onErrorCallback?.(err);
         reject(err);
       });
@@ -72,6 +76,7 @@ class PeerManager {
 
     return new Promise((resolve, reject) => {
       this.isHost = false;
+      this.opening = true;
       this._initPeer();
 
       let settled = false;
@@ -146,11 +151,13 @@ class PeerManager {
       };
 
       this.peer.on('open', () => {
+        this.opening = false;
         tryNextConnection();
       });
 
       this.peer.on('error', (err) => {
         console.error('PeerJS error:', err);
+        this.opening = false;
         rejectOnce(err);
       });
     });
@@ -179,14 +186,20 @@ class PeerManager {
    * Configura una conexión entrante o saliente
    */
   _handleConnection(conn) {
+    if (this.connection && this.connection !== conn && this.connection.open) {
+      try { this.connection.close(); } catch (e) {}
+    }
+
     this.connection = conn;
-    this.connected = true;
+    this.connected = Boolean(conn?.open);
 
     conn.on('open', () => {
+      this.connected = true;
       this.onConnectedCallback?.();
     });
 
     if (conn.open) {
+      this.connected = true;
       this.onConnectedCallback?.();
     }
 
@@ -195,12 +208,19 @@ class PeerManager {
     });
 
     conn.on('close', () => {
+      if (this.connection === conn) {
+        this.connection = null;
+      }
       this.connected = false;
       this.onDisconnectedCallback?.();
     });
 
     conn.on('error', (err) => {
       console.error('Connection error:', err);
+      if (this.connection === conn) {
+        this.connection = null;
+      }
+      this.connected = false;
       this.onErrorCallback?.(err);
     });
   }
@@ -333,13 +353,18 @@ class PeerManager {
    * Cierra la conexión y libera recursos
    */
   disconnect() {
-    if (this.connection) {
-      this.connection.close();
-    }
-    if (this.peer) {
-      this.peer.destroy();
-    }
+    try {
+      if (this.connection) {
+        this.connection.close();
+      }
+    } catch (e) {}
+    try {
+      if (this.peer) {
+        this.peer.destroy();
+      }
+    } catch (e) {}
     this.connected = false;
+    this.opening = false;
     this.isHost = false;
     this.myId = null;
     this.connection = null;
