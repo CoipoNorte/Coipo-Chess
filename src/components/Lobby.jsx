@@ -100,25 +100,16 @@ function Lobby() {
     setTimeout(() => setStatusMessage('Esperando oponente...'), 1500)
   }
 
-  const shareText = `♟️ ¡Juega ajedrez conmigo en ${modeName}!
+  const modeName = isBlindMode ? 'Modo A Ciegas 🕶️' : 'Modo Online 👥';
 
-Únete a mi sala en Coipo Chess:
-
-🔑 Código: ${roomId}
-▶️ Entra aquí: ${window.location.href}
-
-¡Espero tu movimiento! 🎮`;
+  const shareText = `♟️ ¡Juega ajedrez conmigo en ${modeName}!\n\nÚnete a mi sala en Coipo Chess:\n\n🔑 Código: ${roomId}\n\n▶️ Entra aquí: ${window.location.href}\n\nEspero tu movimiento! 🎮`;
 
   const handleShareWhatsApp = () => {
-    // WhatsApp funciona bien con solo el parámetro text
-    const url = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-    window.open(url, '_blank');
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
   };
 
   const handleShareTelegram = () => {
-    // Telegram permite separar el enlace para generar una mejor vista previa
-    const url = `https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent(`♟️ ¡Juega ajedrez conmigo en ${modeName}!\n\n🔑 Código: ${roomId}\n\n¡Espero tu movimiento! 🎮`)}`;
-    window.open(url, '_blank');
+    window.open(`https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent(shareText)}`, '_blank');
   };
 
   const handleCancel = () => {
