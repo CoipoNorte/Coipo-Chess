@@ -19,6 +19,10 @@ class PeerManager {
     this.onErrorCallback = null;
   }
 
+  normalizeId(id) {
+    return String(id || '').trim().toUpperCase();
+  }
+
   /**
    * Crea una sala (modo anfitrión)
    * @returns {Promise<string>} El ID de la sala (PeerID)
@@ -29,8 +33,9 @@ class PeerManager {
       this._initPeer();
 
       this.peer.on('open', (id) => {
-        this.myId = id;
-        resolve(id);
+        const normalizedId = this.normalizeId(id);
+        this.myId = normalizedId;
+        resolve(normalizedId);
       });
 
       this.peer.on('connection', (conn) => {
@@ -51,12 +56,14 @@ class PeerManager {
    * @returns {Promise<void>}
    */
   joinRoom(hostId) {
+    const normalizedHostId = this.normalizeId(hostId);
+
     return new Promise((resolve, reject) => {
       this.isHost = false;
       this._initPeer();
 
       this.peer.on('open', () => {
-        const conn = this.peer.connect(hostId, {
+        const conn = this.peer.connect(normalizedHostId, {
           reliable: true,
           serialization: 'json',
         });

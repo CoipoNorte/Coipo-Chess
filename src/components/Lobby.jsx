@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import PeerManager from '../utils/peerManager'
 import './Lobby.css'
 
 function Lobby() {
   const { mode } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const peerRef = useRef(null)
+  const autoJoinAttemptedRef = useRef(false)
   const [view, setView] = useState('select')
   const [roomId, setRoomId] = useState('')
   const [joinInput, setJoinInput] = useState('')
@@ -54,8 +56,8 @@ function Lobby() {
     }
   }
 
-  const handleJoinRoom = async () => {
-    const code = joinInput.trim().toUpperCase()
+  const handleJoinRoom = async (providedCode = null) => {
+    const code = (providedCode || joinInput).trim().toUpperCase()
     if (!code) { setError('Ingresa un código de sala'); return }
 
     setView('joining')
@@ -69,9 +71,8 @@ function Lobby() {
       await pm.joinRoom(code)
       setView('connecting')
 
-      pm.send({ type: 'JOIN' })
-
       pm.onConnected(() => {
+        pm.send({ type: 'JOIN' })
         setView('connected')
         setTimeout(() => {
           navigate(`/game/${mode}`, {
@@ -94,21 +95,38 @@ function Lobby() {
     }
   }
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const roomFromUrl = params.get('room')?.trim().toUpperCase()
+
+    if (!roomFromUrl || autoJoinAttemptedRef.current) return
+
+    autoJoinAttemptedRef.current = true
+    setJoinInput(roomFromUrl)
+    handleJoinRoom(roomFromUrl)
+  }, [location.search, mode])
+
   const handleCopyRoomId = () => {
     navigator.clipboard.writeText(roomId)
     setStatusMessage('¡Copiado!')
     setTimeout(() => setStatusMessage('Esperando oponente...'), 1500)
   }
 
+  const shareUrl = (() => {
+    const url = new URL(window.location.href)
+    if (roomId) url.searchParams.set('room', roomId)
+    return url.toString()
+  })()
+
   const modeName = isBlindMode ? 'Modo A Ciegas 🕶️' : 'Modo Online 👥';
-  const shareText = `♟️ ¡Juega ajedrez conmigo en ${modeName}!\n\nÚnete a mi partida haciendo clic aquí:\n\n${window.location.href}\n\n¡Espero tu movimiento! 🎮`;
+  const shareText = `♟️ ¡Juega ajedrez conmigo en ${modeName}!\n\nCódigo de sala: ${roomId || '—'}\n\nÚnete aquí:\n${shareUrl}\n\n¡Espero tu movimiento! 🎮`;
 
   const handleShareWhatsApp = () => {
     window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
   };
 
   const handleShareTelegram = () => {
-    window.open(`https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent(shareText)}`, '_blank');
+    window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank');
   };
 
   const handleCancel = () => {
