@@ -186,6 +186,10 @@ class PeerManager {
       this.onConnectedCallback?.();
     });
 
+    if (conn.open) {
+      this.onConnectedCallback?.();
+    }
+
     conn.on('data', (data) => {
       this.onDataCallback?.(data);
     });
@@ -306,6 +310,9 @@ class PeerManager {
    */
   onConnected(callback) {
     this.onConnectedCallback = callback;
+    if (this.connection?.open) {
+      callback();
+    }
   }
 
   /**

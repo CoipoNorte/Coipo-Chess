@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import PeerManager from '../utils/peerManager'
 import './Lobby.css'
 
@@ -39,9 +39,9 @@ function Lobby() {
       pm.onConnected(() => {
         setView('connected')
         setTimeout(() => {
-          navigate(`/game/${mode}`, {
-            state: { peerManager: pm, playerColor: 'w', isHost: true, isBlindMode, roomId: id },
-          })
+          window.__coipoPeerManager = pm
+          window.__coipoRouteState = { playerColor: 'w', isHost: true, isBlindMode, roomId: id }
+          window.location.hash = `#/game/${mode}`
         }, 800)
       })
 
@@ -57,7 +57,8 @@ function Lobby() {
   }
 
   const handleJoinRoom = async (providedCode = null) => {
-    const code = (providedCode || joinInput).trim()
+    const rawCode = typeof providedCode === 'string' ? providedCode : joinInput
+    const code = String(rawCode ?? '').trim()
     if (!code) { setError('Ingresa un código de sala'); return }
 
     setView('joining')
@@ -75,9 +76,9 @@ function Lobby() {
         pm.send({ type: 'JOIN' })
         setView('connected')
         setTimeout(() => {
-          navigate(`/game/${mode}`, {
-            state: { peerManager: pm, playerColor: 'b', isHost: false, isBlindMode, roomId: code },
-          })
+          window.__coipoPeerManager = pm
+          window.__coipoRouteState = { playerColor: 'b', isHost: false, isBlindMode, roomId: code }
+          window.location.hash = `#/game/${mode}`
         }, 800)
       })
 
@@ -91,7 +92,8 @@ function Lobby() {
       })
     } catch (err) {
       setError(`Error: ${err.message}`)
-      setView('join')
+      setStatusMessage('')
+      setView('select')
     }
   }
 

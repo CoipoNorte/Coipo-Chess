@@ -58,7 +58,8 @@ export default function Game() {
   const [chatOpen, setChatOpen] = useState(false)
   const chatRef = useRef(null)
 
-  const isHost = loc.state?.isHost ?? true
+  const routeState = loc.state || window.__coipoRouteState || {}
+  const isHost = routeState.isHost ?? true
   const isHostRef = useRef(isHost)
 
   const vsPC  = mode === 'vspc' || mode === 'pc-levels'
@@ -69,10 +70,10 @@ export default function Game() {
 
   // Init
   useEffect(() => {
-    const st = loc.state || {}
+    const st = routeState || {}
     const pc = st.playerColor || 'w'
     if (online) {
-      const p = st.peerManager
+      const p = st.peerManager || window.__coipoPeerManager
       if (!p) { nav('/'); return }
       pm.current = p; setPColor(pc); setMyTurn(pc === 'w')
       p.onData(d => peerData(d))
@@ -85,7 +86,14 @@ export default function Game() {
     // Play game start sound after first user interaction
     const playStart = () => { SFX.gameStart(); window.removeEventListener('click', playStart) }
     window.addEventListener('click', playStart, { once: true })
-    return () => { pm.current?.disconnect(); ai.current?.destroy(); window.removeEventListener('click', playStart) }
+    return () => {
+      pm.current?.disconnect()
+      if (window.__coipoPeerManager === pm.current) {
+        delete window.__coipoPeerManager
+      }
+      ai.current?.destroy()
+      window.removeEventListener('click', playStart)
+    }
   }, [])
 
   // IA trigger
