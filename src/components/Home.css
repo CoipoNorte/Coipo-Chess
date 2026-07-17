@@ -1,0 +1,342 @@
+/* =============================================
+   HOME v2 - Coipo Chess Inicio Premium
+   ============================================= */
+
+.home {
+  width: 100%;
+  max-width: 920px;
+  animation: fadeIn 0.4s ease;
+}
+
+/* ── Hero ── */
+.home-hero {
+  text-align: center;
+  padding: 32px 20px 28px;
+}
+
+.home-hero-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.hero-chess-piece {
+  font-size: 4.5rem;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.2));
+}
+
+.hero-glow {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.15) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.3); opacity: 1; }
+}
+
+.home-hero-title {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #F0F0F0 30%, #FFD700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.home-hero-subtitle {
+  font-size: 1.05rem;
+  color: var(--text-secondary);
+  max-width: 480px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+.home-hero-features {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.hero-feature {
+  font-size: 0.8rem;
+  color: var(--accent-gold);
+  background: rgba(255, 215, 0, 0.08);
+  padding: 4px 14px;
+  border-radius: 20px;
+  letter-spacing: 1px;
+  font-weight: 500;
+}
+
+/* ── Modes ── */
+.home-modes {
+  padding: 12px 0 8px;
+}
+
+.modes-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.modes-header-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-color), transparent);
+}
+
+.modes-header-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  letter-spacing: 3px;
+  font-weight: 600;
+}
+
+.home-modes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+/* ── Mode Cards ── */
+.mode-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: var(--bg-card);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.mode-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.02));
+  pointer-events: none;
+}
+
+.mode-card-accent {
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  background: var(--mode-color);
+  border-radius: 0 3px 3px 0;
+  opacity: 0;
+  transition: all 0.3s;
+}
+
+.mode-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--mode-color);
+  background: rgba(30, 30, 30, 0.95);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(var(--mode-color), 0.05);
+}
+
+.mode-card:hover .mode-card-accent {
+  opacity: 1;
+  top: 10%;
+  bottom: 10%;
+}
+
+.mode-card-icon {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  transition: transform 0.3s;
+}
+
+.mode-card:hover .mode-card-icon {
+  transform: scale(1.08);
+}
+
+.mode-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.mode-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.mode-card-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mode-card-badge {
+  font-size: 0.6rem;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.mode-card-description {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.mode-card-arrow {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: all 0.3s;
+  display: flex;
+}
+
+.mode-card:hover .mode-card-arrow {
+  transform: translateX(4px);
+  color: var(--mode-color);
+}
+
+/* ── How To Play ── */
+.home-howto {
+  padding: 12px 0 0;
+}
+
+.howto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 10px;
+}
+
+.howto-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.howto-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.howto-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.howto-num {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 160, 0, 0.1));
+  border: 1px solid rgba(255, 215, 0, 0.25);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+
+.howto-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.howto-step-text strong {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.howto-step-text span {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* ── Features ── */
+.home-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  padding: 24px 0 10px;
+}
+
+.feature-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: var(--bg-card);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+
+.feature-card:hover {
+  background: rgba(30, 30, 30, 0.9);
+  border-color: rgba(255,255,255,0.12);
+}
+
+.feature-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.feature-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feature-text strong {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.feature-text span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .home-hero-title { font-size: 1.8rem; }
+  .hero-chess-piece { font-size: 3.5rem; }
+  .home-modes-grid { grid-template-columns: 1fr; }
+  .home-hero-features { flex-wrap: wrap; gap: 8px; }
+}

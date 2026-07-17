@@ -1,0 +1,75 @@
+/* =============================================
+   ChessClock — Premium countdown timers
+   ============================================= */
+
+.chess-clock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  max-width: var(--board-size);
+}
+
+.clock-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  transition: all 0.3s ease;
+}
+
+.clock-row.clock-active {
+  border-color: var(--accent-gold);
+  background: rgba(255, 215, 0, 0.08);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.15);
+}
+
+.clock-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.clock-time {
+  font-family: var(--font-mono);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 1px;
+  transition: color 0.3s;
+}
+
+.clock-ticking {
+  color: var(--accent-gold);
+}
+
+.clock-low {
+  color: #ff9800 !important;
+  animation: clockPulse 1s ease-in-out infinite;
+}
+
+.clock-critical {
+  color: var(--accent-red) !important;
+  animation: clockPulse 0.5s ease-in-out infinite;
+}
+
+@keyframes clockPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 600px) {
+  .clock-time { font-size: 1.1rem; }
+  .clock-row { padding: 4px 10px; }
+}
+
+@media (max-width: 480px) {
+  .clock-time { font-size: 1rem; }
+  .clock-name { font-size: 0.72rem; }
+}
