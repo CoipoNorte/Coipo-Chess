@@ -149,7 +149,7 @@ function Lobby() {
                 type="text"
                 placeholder="Código de sala..."
                 value={joinInput}
-                onChange={(e) => setJoinInput(e.target.value.toUpperCase())}
+                onChange={(e) => setJoinInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleJoinRoom()}
                 maxLength={60}
                 autoFocus
