@@ -24,6 +24,28 @@ class PeerManager {
     return String(id || '').trim();
   }
 
+  resolveRoomCode(idOrUrl) {
+    const raw = this.normalizeId(idOrUrl)
+    if (!raw) return ''
+
+    if (/^https?:\/\//i.test(raw)) {
+      try {
+        const url = new URL(raw)
+        const fromSearch = url.searchParams.get('room')
+        if (fromSearch) return this.normalizeId(fromSearch)
+        const hashMatch = url.hash?.match(/[?&]room=([^&#]+)/i)
+        if (hashMatch?.[1]) return this.normalizeId(hashMatch[1])
+      } catch (e) {
+        // Ignore invalid URLs and fall back to the raw input
+      }
+    }
+
+    const hashMatch = raw.match(/[?&]room=([^&#]+)/i)
+    if (hashMatch?.[1]) return this.normalizeId(hashMatch[1])
+
+    return raw
+  }
+
   buildPeerIdCandidates(id) {
     const normalized = this.normalizeId(id)
     const candidates = [normalized]
@@ -42,27 +64,49 @@ class PeerManager {
    */
   createRoom() {
     return new Promise((resolve, reject) => {
-      this.isHost = true;
-      this.opening = true;
-      this._initPeer();
+      const attemptCreate = (attempt = 0) => {
+        this.isHost = true;
+        this.opening = true;
+        this._initPeer();
 
-      this.peer.on('open', (id) => {
-        const normalizedId = this.normalizeId(id);
-        this.myId = normalizedId;
-        this.opening = false;
-        resolve(normalizedId);
-      });
+        let settled = false;
+        const settle = (fn, value) => {
+          if (!settled) {
+            settled = true;
+            fn(value);
+          }
+        };
 
-      this.peer.on('connection', (conn) => {
-        this._handleConnection(conn);
-      });
+        const handleError = (err) => {
+          const message = String(err?.message || err || '');
+          const shouldRetry = /server|network|id|unavailable|could not/i.test(message.toLowerCase());
+          if (shouldRetry && attempt < 2) {
+            this.disconnect();
+            window.setTimeout(() => attemptCreate(attempt + 1), 1000 * (attempt + 1));
+            return;
+          }
 
-      this.peer.on('error', (err) => {
-        console.error('PeerJS error:', err);
-        this.opening = false;
-        this._triggerError(err);
-        reject(err);
-      });
+          console.error('PeerJS error:', err);
+          this.opening = false;
+          this._triggerError(err);
+          settle(reject, err);
+        };
+
+        this.peer.once('open', (id) => {
+          const normalizedId = this.normalizeId(id);
+          this.myId = normalizedId;
+          this.opening = false;
+          settle(resolve, normalizedId);
+        });
+
+        this.peer.on('connection', (conn) => {
+          this._handleConnection(conn);
+        });
+
+        this.peer.once('error', handleError);
+      };
+
+      attemptCreate();
     });
   }
 
@@ -72,7 +116,8 @@ class PeerManager {
    * @returns {Promise<void>}
    */
   joinRoom(hostId) {
-    const hostIdCandidates = this.buildPeerIdCandidates(hostId);
+    const resolvedHostId = this.resolveRoomCode(hostId);
+    const hostIdCandidates = this.buildPeerIdCandidates(resolvedHostId);
 
     return new Promise((resolve, reject) => {
       this.isHost = false;

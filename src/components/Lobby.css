@@ -55,6 +55,13 @@
   font-size: 0.8rem;
 }
 
+.lobby-help {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: -4px 0 4px;
+}
+
 .lobby-divider::before,
 .lobby-divider::after {
   content: '';
@@ -132,6 +139,14 @@
   font-size: 0.95rem;
   font-weight: 600;
   min-width: 100px;
+}
+
+.lobby-btn-copy {
+  background: rgba(255,255,255,0.05);
+  border-color: var(--border-color);
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .lobby-btn-join:hover {
@@ -371,7 +386,25 @@
 }
 
 @media (max-width: 768px) {
-  .lobby-card { padding: 20px 16px; }
+  .lobby {
+    width: 100%;
+    gap: 14px;
+  }
+  .lobby-card { padding: 20px 14px; border-radius: 16px; }
   .room-id { font-size: 1.5rem; letter-spacing: 3px; }
   .lobby-join-form { flex-direction: column; }
+  .lobby-btn-join { width: 100%; min-width: 0; }
+  .room-share-row { flex-direction: column; }
+  .lobby-btn-whatsapp,
+  .lobby-btn-telegram { justify-content: center; width: 100%; }
+}
+
+@media (max-width: 480px) {
+  .lobby-card { padding: 16px 12px; }
+  .lobby-title { font-size: 1.3rem; }
+  .lobby-subtitle { font-size: 0.82rem; }
+  .lobby-btn { padding: 12px 14px; }
+  .lobby-btn-icon { font-size: 1.55rem; }
+  .lobby-btn-label { font-size: 0.95rem; }
+  .lobby-btn-desc { font-size: 0.72rem; }
 }

@@ -335,8 +335,23 @@
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
-  .home-hero-title { font-size: 1.8rem; }
-  .hero-chess-piece { font-size: 3.5rem; }
+  .home-hero { padding: 20px 8px 22px; }
+  .home-hero-title { font-size: 1.7rem; }
+  .hero-chess-piece { font-size: 3.2rem; }
   .home-modes-grid { grid-template-columns: 1fr; }
   .home-hero-features { flex-wrap: wrap; gap: 8px; }
+  .hero-feature { width: 100%; text-align: center; }
+  .howto-grid { grid-template-columns: 1fr; }
+  .home-features { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .home-hero-title { font-size: 1.4rem; }
+  .home-hero-subtitle { font-size: 0.95rem; }
+  .mode-card { padding: 13px; gap: 10px; }
+  .mode-card-icon { width: 40px; height: 40px; font-size: 1.35rem; }
+  .mode-card-title { font-size: 0.9rem; }
+  .mode-card-description { font-size: 0.74rem; }
+  .howto-card { padding: 16px; }
+  .feature-card { padding: 12px; }
 }

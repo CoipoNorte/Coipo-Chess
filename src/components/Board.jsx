@@ -186,9 +186,9 @@ function Board({
       if (!el) return null
 
       el.style.transition = 'none'
-      el.style.transform = `translate(${dx}%, ${dy}%)`
+      el.style.transform = `translate(${dx}%, ${dy}%) scale(0.96)`
       void el.offsetHeight
-      el.style.transition = 'transform 0.22s cubic-bezier(0.25, 0.1, 0.25, 1)'
+      el.style.transition = 'transform 0.24s cubic-bezier(0.23, 1, 0.32, 1)'
       el.style.transform = ''
 
       return el

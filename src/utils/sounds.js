@@ -53,26 +53,24 @@ export function move() {
   const ctx = getCtx()
   const t = ctx.currentTime
 
-  // Wood-like impact noise
-  const { src: noise, filter } = noiseClick(ctx, 0.04, 3200)
+  const { src: noise, filter } = noiseClick(ctx, 0.03, 3600)
   const nGain = ctx.createGain()
-  nGain.gain.setValueAtTime(0.18, t)
-  nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.04)
+  nGain.gain.setValueAtTime(0.10, t)
+  nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.03)
   noise.connect(filter).connect(nGain).connect(ctx.destination)
   noise.start(t)
-  noise.stop(t + 0.05)
+  noise.stop(t + 0.04)
 
-  // Low body tone
   const osc = ctx.createOscillator()
-  osc.type = 'sine'
-  osc.frequency.setValueAtTime(180, t)
-  osc.frequency.exponentialRampToValueAtTime(90, t + 0.06)
+  osc.type = 'triangle'
+  osc.frequency.setValueAtTime(220, t)
+  osc.frequency.exponentialRampToValueAtTime(140, t + 0.05)
   const oGain = ctx.createGain()
-  oGain.gain.setValueAtTime(0.12, t)
-  oGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06)
+  oGain.gain.setValueAtTime(0.06, t)
+  oGain.gain.exponentialRampToValueAtTime(0.001, t + 0.05)
   osc.connect(oGain).connect(ctx.destination)
   osc.start(t)
-  osc.stop(t + 0.07)
+  osc.stop(t + 0.06)
 }
 
 /**

@@ -3,6 +3,7 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import ChessEngine from '../utils/chessEngine'
 import AIPlayer from '../utils/aiPlayer'
 import { obfuscateBoard } from '../utils/blindMode'
+import { resolveBoardOrientation } from '../utils/boardOrientation'
 import Board from './Board'
 import { ChessPiece } from './ChessPieces'
 import ChessClock from './ChessClock'
@@ -44,7 +45,7 @@ export default function Game() {
   const [goText, setGoText] = useState('')
   const [flip, setFlip] = useState(false)
   const [blindBrd, setBlindBrd] = useState(null)
-  const boardFlipped = pColor === 'b' ? !flip : flip
+  const boardFlipped = resolveBoardOrientation(pColor, flip)
   const [promo, setPromo] = useState(null) // { from, to }
   const [aiSt, setAiSt] = useState('…')
   const [muted, setMuted] = useState(false)
@@ -479,7 +480,7 @@ export default function Game() {
             activeTurn={clockRunning ? turn : null}
             running={clockRunning && status === 'PLAYING'}
             onTimeUp={handleTimeUp}
-            flipped={flip}
+            flipped={boardFlipped}
           />
 
           <div className="pbar pb-down">

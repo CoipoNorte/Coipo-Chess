@@ -16,13 +16,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 14px;
-  background: var(--bg-card);
-  backdrop-filter: blur(10px);
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(30,30,30,0.95), rgba(20,20,20,0.9));
+  backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: 12px;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
 }
 .gbl, .gbc, .gbr { display: flex; align-items: center; gap: 6px; }
 .gmode { font-size: 0.9rem; font-weight: 600; }
@@ -35,10 +36,11 @@
 .gthink { font-size: 1rem; animation: pulse 0.8s infinite; }
 .gicn {
   background: rgba(255,255,255,0.05); border: 1px solid var(--border-color);
-  border-radius: 5px; padding: 2px 6px; font-size: 0.9rem; line-height: 1.4;
+  border-radius: 8px; padding: 4px 8px; font-size: 0.9rem; line-height: 1.4;
   color: var(--text-secondary); cursor: pointer; transition: 0.15s;
+  min-height: 32px;
 }
-.gicn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+.gicn:hover { background: rgba(255,255,255,0.12); color: var(--text-primary); transform: translateY(-1px); }
 
 /* ═══ MAIN ═══ */
 .gmain {
@@ -399,7 +401,7 @@
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 860px) {
-  .gmain { flex-direction: column; align-items: center; }
+  .gmain { flex-direction: column; align-items: center; gap: 8px; }
   .gright {
     width: 100%;
     max-width: var(--board-size);
@@ -417,21 +419,50 @@
   .gacts2 { order: 4; width: 100%; }
   .pbar { font-size: 0.75rem; padding: 4px 8px; }
   .pc { font-size: 1rem; }
-.pc .chess-piece-svg { width: 1.1rem; height: 1.1rem; }
+  .pc .chess-piece-svg { width: 1.1rem; height: 1.1rem; }
+}
+
+@media (max-width: 640px) {
+  .gbar {
+    padding: 8px 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .gbl, .gbc, .gbr {
+    justify-content: center;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .gmode { font-size: 0.82rem; }
+  .gt { font-size: 0.78rem; }
+  .gact { min-height: 40px; }
+  .promobar {
+    width: calc(100% - 12px);
+    justify-content: center;
+    padding: 6px 10px;
+    gap: 4px;
+  }
 }
 
 @media (max-width: 480px) {
   .game { gap: 4px; }
-  .gbar { padding: 4px 8px; }
-  .gmode { font-size: 0.8rem; }
-  .gt { font-size: 0.78rem; }
-  .pbar { font-size: 0.7rem; padding: 3px 6px; }
+  .gbar { padding: 6px 6px; }
+  .gmode { font-size: 0.78rem; }
+  .gt { font-size: 0.76rem; }
+  .pbar { font-size: 0.7rem; padding: 3px 6px; gap: 5px; }
   .pc { font-size: 0.9rem; }
-.pc .chess-piece-svg { width: 1rem; height: 1rem; }
+  .pc .chess-piece-svg { width: 1rem; height: 1rem; }
   .gright { gap: 3px; }
   .ghist { max-height: 80px; }
-  .promobar { padding: 6px 10px; gap: 4px; }
   .pbtn { width: 36px; height: 36px; font-size: 1.5rem; }
   .min { padding: 18px 14px; }
   .gact { font-size: 0.72rem; padding: 5px 6px; }
+  .chat-panel {
+    left: 6px;
+    right: 6px;
+    width: auto;
+    bottom: 6px;
+    max-height: 50vh;
+  }
 }
