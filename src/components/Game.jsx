@@ -44,6 +44,7 @@ export default function Game() {
   const [goText, setGoText] = useState('')
   const [flip, setFlip] = useState(false)
   const [blindBrd, setBlindBrd] = useState(null)
+  const boardFlipped = pColor === 'b' ? !flip : flip
   const [promo, setPromo] = useState(null) // { from, to }
   const [aiSt, setAiSt] = useState('…')
   const [muted, setMuted] = useState(false)
@@ -84,7 +85,7 @@ export default function Game() {
       })
     } else if (vsPC && mode === 'pc-levels') setShowDiff(true)
     if (vsPC) { const a = new AIPlayer('medium'); ai.current = a; a.init().then(()=>setAiSt('SF')).catch(()=>setAiSt('local')) }
-    engine.reset(); refresh()
+    engine.reset(); refresh(pc)
     setMoveTimes([])
     moveStartRef.current = Date.now()
     setClockRunning(false)
@@ -123,7 +124,16 @@ export default function Game() {
     if (histRef.current) histRef.current.scrollTop = histRef.current.scrollHeight
   }, [hist.length])
 
-  const refresh = useCallback(() => {
+  const gameOver = useCallback((st) => {
+    let r = ''; const w = engine.getTurn()==='w'?'Negras':'Blancas'
+    if (st==='CHECKMATE') r=`Jaque mate. ${w} ganan.`
+    else if (st==='STALEMATE') r='Ahogado. Tablas.'
+    else if (st==='DRAW') r='Tablas.'
+    else return
+    SFX.gameOver(); setGoText(r); setTimeout(()=>setShowGO(true), 500)
+  }, [engine])
+
+  const refresh = useCallback((playerColorOverride = pColor) => {
     const b = engine.getBoard(), t = engine.getTurn(), s = engine.getGameStatus()
     const lm = engine.moveHistory.length > 0 ? engine.moveHistory[engine.moveHistory.length-1] : null
     let ck = []
@@ -132,10 +142,10 @@ export default function Game() {
     }
     setBrd(b); setTurn(t); setLastM(lm); setChk(ck); setStatus(s)
     setCaps({...engine.capturedPieces}); setHist([...engine.moveHistory])
-    if (blind && pm.current) setBlindBrd(obfuscateBoard(b, pColor))
+    if (blind) setBlindBrd(obfuscateBoard(b, playerColorOverride))
     if (s !== 'PLAYING') gameOver(s)
     setSel(null); setLegal([])
-  }, [engine, blind, pColor])
+  }, [engine, blind, pColor, gameOver])
 
   const peerData = useCallback((d) => {
     if (!d?.type) return
@@ -275,15 +285,6 @@ export default function Game() {
     if (!clockRunning && hist.length === 0) setClockRunning(true)
     refresh()
   }
-
-  const gameOver = useCallback((st) => {
-    let r = ''; const w = engine.getTurn()==='w'?'Negras':'Blancas'
-    if (st==='CHECKMATE') r=`Jaque mate. ${w} ganan.`
-    else if (st==='STALEMATE') r='Ahogado. Tablas.'
-    else if (st==='DRAW') r='Tablas.'
-    else return
-    SFX.gameOver(); setGoText(r); setTimeout(()=>setShowGO(true), 500)
-  }, [engine])
 
   const resign = () => {
     if (online) pm.current?.sendResign()
@@ -496,7 +497,7 @@ export default function Game() {
           <div className="gboard-wrap">
             <Board
               board={blind&&blindBrd?blindBrd:brd}
-              flipped={flip}
+              flipped={boardFlipped}
               selected={sel}
               legalMoves={legal}
               lastMove={lastM}

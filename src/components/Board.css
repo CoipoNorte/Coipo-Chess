@@ -107,8 +107,9 @@
 
 /* Pieza oculta (modo ciegas) */
 .phid .chess-piece-svg {
-  opacity: 0.5;
-  filter: blur(0.5px) grayscale(0.3);
+  opacity: 0.38;
+  filter: blur(0.35px) grayscale(0.45) opacity(0.45);
+  transform: scale(0.96);
 }
 
 /* ─── Capture ghost — desvanecimiento de pieza capturada ─── */
