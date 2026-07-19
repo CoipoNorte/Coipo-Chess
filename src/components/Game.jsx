@@ -7,11 +7,26 @@ import { resolveBoardOrientation } from '../utils/boardOrientation'
 import Board from './Board'
 import { ChessPiece } from './ChessPieces'
 import ChessClock from './ChessClock'
+import EvalGraph from './EvalGraph'
 import * as SFX from '../utils/sounds'
 import { toggleMute } from '../utils/sounds'
 import './Game.css'
 
 const PV = { q:9, r:5, b:3, n:3, p:1 }
+const TIME_THRESHOLDS = { fast: 3, slow: 15, verySlow: 30 }
+const timeClass = (t) => {
+  if (t == null) return ''
+  if (t < TIME_THRESHOLDS.fast) return 'gtime-fast'
+  if (t < TIME_THRESHOLDS.slow) return ''
+  if (t < TIME_THRESHOLDS.verySlow) return 'gtime-slow'
+  return 'gtime-very-slow'
+}
+const BOARD_THEMES = [
+  { id:'classic', icon:'♟️', name:'Clásico', d:'Beige & verde' },
+  { id:'dark', icon:'🌑', name:'Oscuro', d:'Blanco & verde intenso' },
+  { id:'wood', icon:'🪵', name:'Madera', d:'Cálido tono marrón' },
+  { id:'marble', icon:'🪨', name:'Mármol', d:'Blanco & gris elegante' },
+]
 
 export default function Game() {
   const { mode } = useParams()
@@ -42,6 +57,8 @@ export default function Game() {
   const [aiDiff, setAiDiff] = useState('medium')
   const [showDiff, setShowDiff] = useState(false)
   const [showGO, setShowGO] = useState(false)
+  const [showThemeSelect, setShowThemeSelect] = useState(false)
+
   const [goText, setGoText] = useState('')
   const [flip, setFlip] = useState(false)
   const [blindBrd, setBlindBrd] = useState(null)
@@ -49,6 +66,8 @@ export default function Game() {
   const [promo, setPromo] = useState(null) // { from, to }
   const [aiSt, setAiSt] = useState('…')
   const [muted, setMuted] = useState(false)
+  const [boardTheme, setBoardTheme] = useState(() => localStorage.getItem('coipo-board-theme') || 'classic')
+  const changeBoardTheme = (id) => { setBoardTheme(id); localStorage.setItem('coipo-board-theme', id); setShowThemeSelect(false) }
   const [clockTime, setClockTime] = useState(300) // 5 minutes default
   const [clockIncrement, setClockIncrement] = useState(0)
   const [clockRunning, setClockRunning] = useState(false)
@@ -59,6 +78,10 @@ export default function Game() {
   const [chatInput, setChatInput] = useState('')
   const [chatOpen, setChatOpen] = useState(false)
   const chatRef = useRef(null)
+  const [matPulse, setMatPulse] = useState(false)
+  const [evalHistory, setEvalHistory] = useState([])
+  const prevAdvRef = useRef(0)
+  const matPulseTimerRef = useRef(null)
 
   const routeState = loc.state || window.__coipoRouteState || {}
   const isHost = routeState.isHost ?? true
@@ -84,9 +107,17 @@ export default function Game() {
         setShowGO(true)
         SFX.gameOver()
       })
-    } else if (vsPC && mode === 'pc-levels') setShowDiff(true)
-    if (vsPC) { const a = new AIPlayer('medium'); ai.current = a; a.init().then(()=>setAiSt('SF')).catch(()=>setAiSt('local')) }
+    } else {
+      // Clean stale P2P state for local/AI modes
+      try {
+        delete window.__coipoRouteState
+        delete window.__coipoPeerManager
+      } catch(e) {}
+      if (vsPC && mode === 'pc-levels') setShowDiff(true)
+    }
+    if (vsPC) { const a = new AIPlayer(aiDiff); ai.current = a; a.init().then(()=>setAiSt('SF')).catch(()=>setAiSt('local')) }
     engine.reset(); refresh(pc)
+    console.log('[Game] Init mode:', mode, 'vsPC:', vsPC, 'pc:', pc, 'board:', engine.getBoard().length)
     setMoveTimes([])
     moveStartRef.current = Date.now()
     setClockRunning(false)
@@ -94,11 +125,10 @@ export default function Game() {
     const playStart = () => { SFX.gameStart(); window.removeEventListener('click', playStart) }
     window.addEventListener('click', playStart, { once: true })
     return () => {
-      pm.current?.disconnect()
-      if (window.__coipoPeerManager === pm.current) {
-        delete window.__coipoPeerManager
-      }
-      ai.current?.destroy()
+      try { pm.current?.disconnect() } catch(e) {}
+      try { delete window.__coipoPeerManager } catch(e) {}
+      try { delete window.__coipoRouteState } catch(e) {}
+      try { ai.current?.destroy() } catch(e) {}
       window.removeEventListener('click', playStart)
     }
   }, [])
@@ -125,13 +155,25 @@ export default function Game() {
     if (histRef.current) histRef.current.scrollTop = histRef.current.scrollHeight
   }, [hist.length])
 
+  // Material pulse animation when advantage changes significantly
+  useEffect(() => {
+    const diff = Math.abs(adv - prevAdvRef.current)
+    if (diff >= 2 && adv !== 0) {
+      setMatPulse(true)
+      if (matPulseTimerRef.current) clearTimeout(matPulseTimerRef.current)
+      matPulseTimerRef.current = setTimeout(() => setMatPulse(false), 900)
+    }
+    prevAdvRef.current = adv
+    return () => { if (matPulseTimerRef.current) clearTimeout(matPulseTimerRef.current) }
+  }, [adv])
+
   const gameOver = useCallback((st) => {
     let r = ''; const w = engine.getTurn()==='w'?'Negras':'Blancas'
-    if (st==='CHECKMATE') r=`Jaque mate. ${w} ganan.`
-    else if (st==='STALEMATE') r='Ahogado. Tablas.'
-    else if (st==='DRAW') r='Tablas.'
+    if (st==='CHECKMATE') { r=`Jaque mate. ${w} ganan.`; SFX.checkmate(); setTimeout(()=>SFX.gameOver(), 400) }
+    else if (st==='STALEMATE') { r='Ahogado. Tablas.'; SFX.gameOver() }
+    else if (st==='DRAW') { r='Tablas.'; SFX.gameOver() }
     else return
-    SFX.gameOver(); setGoText(r); setTimeout(()=>setShowGO(true), 500)
+    setGoText(r); setTimeout(()=>setShowGO(true), 500)
   }, [engine])
 
   const refresh = useCallback((playerColorOverride = pColor) => {
@@ -151,7 +193,7 @@ export default function Game() {
   const peerData = useCallback((d) => {
     if (!d?.type) return
     switch (d.type) {
-      case 'MOVE': if(d.data){const r=engine.move(d.data.from,d.data.to,d.data.promotion);if(r){SFX.move();setMoveTimes(prev => [...prev, null]);setMyTurn(true);refresh()}}break
+      case 'MOVE': if(d.data){const r=engine.move(d.data.from,d.data.to,d.data.promotion);if(r){if(r.captured)playCaptureSound(r.captured);else if(r.flags?.includes('k'))SFX.castle();else SFX.move();if(engine.isInCheck())setTimeout(()=>SFX.check(),120);setMoveTimes(prev => [...prev, null]);setMyTurn(true);refresh()}}break
       case 'RESIGN': setGoText('El rival se rindió'); setShowGO(true); SFX.gameOver(); break
       case 'DRAW_OFFER': if(window.confirm('🤝 ¿Aceptas tablas?')){pm.current?.sendDrawAccept();setGoText('Tablas');setShowGO(true)}break
       case 'DRAW_ACCEPT': setGoText('Tablas'); setShowGO(true); break
@@ -182,8 +224,11 @@ export default function Game() {
       if (m) {
         const r = engine.move(m.from, m.to, m.promotion)
         if (r) {
-          if (r.captured) SFX.capture()
-          else if (r.flags?.includes('k')) SFX.castle()
+          if (r.captured) {
+            const isImportant = r.captured === 'q' || r.captured === 'r'
+            if (isImportant) SFX.importantCapture()
+            else SFX.capture()
+          } else if (r.flags?.includes('k')) SFX.castle()
           else SFX.move()
           if (engine.isInCheck()) setTimeout(() => SFX.check(), 120)
           setMoveTimes(prev => [...prev, null])
@@ -262,10 +307,21 @@ export default function Game() {
     if (r) { SFX.promote(); afterMove(r); setPromo(null) }
   }
 
+  // Helper: play the right capture sound based on piece value
+  const playCaptureSound = (capturedType) => {
+    if (capturedType === 'q' || capturedType === 'r') SFX.importantCapture()
+    else SFX.capture()
+  }
+
   const afterMove = (mv) => {
-    if (mv.captured) SFX.capture()
+    // Determine capture type: queen=9, rook=5 → important capture
+    if (mv.captured) playCaptureSound(mv.captured)
     else if (mv.flags?.includes('k')) SFX.castle()
     else SFX.move()
+    // Track eval history (material advantage after each move)
+    const curWCap = matVal(engine.capturedPieces.b)
+    const curBCap = matVal(engine.capturedPieces.w)
+    setEvalHistory(prev => [...prev, curWCap - curBCap])
     const te = new ChessEngine(); te.loadFEN(engine.getFEN())
     if (te.isInCheck()) setTimeout(() => SFX.check(), 120)
     setSel(null); setLegal([])
@@ -300,9 +356,9 @@ export default function Game() {
     clockRef.current?.resetClock()
     syncClock(time, increment)
   }
-  const newGame = () => { aiCancelRef.current = true; engine.reset(); setSel(null); setLegal([]); setLastM(null); setChk([]); setStatus('PLAYING'); setShowGO(false); setGoText(''); setMyTurn(true); setAiThk(false); setPromo(null); setClockRunning(false); setMoveTimes([]); moveStartRef.current = Date.now(); clockRef.current?.resetClock(); refresh(); SFX.gameStart() }
-  const goHome = () => { aiCancelRef.current = true; pm.current?.disconnect(); nav('/') }
-  const undo = () => { if (!local || hist.length===0 || aiThk) return; aiCancelRef.current = true; engine.undo(); if (vsPC && hist.length >= 2) engine.undo(); setMoveTimes(prev => prev.slice(0, vsPC ? -2 : -1)); moveStartRef.current = Date.now(); refresh(); setMyTurn(true); setAiThk(false); setPromo(null); SFX.undo() }
+  const newGame = () => { aiCancelRef.current = true; engine.reset(); setSel(null); setLegal([]); setLastM(null); setChk([]); setStatus('PLAYING'); setShowGO(false); setGoText(''); setMyTurn(true); setAiThk(false); setPromo(null); setClockRunning(false); setMoveTimes([]); setEvalHistory([]); moveStartRef.current = Date.now(); clockRef.current?.resetClock(); refresh(); SFX.gameStart() }
+  const goHome = () => { aiCancelRef.current = true; try { pm.current?.disconnect() } catch(e) {}; nav('/') }
+  const undo = () => { if (!local || hist.length===0 || aiThk) return; aiCancelRef.current = true; engine.undo(); if (vsPC && hist.length >= 2) engine.undo(); setMoveTimes(prev => prev.slice(0, vsPC ? -2 : -1)); setEvalHistory(prev => prev.slice(0, prev.length - (vsPC ? 2 : 1))); moveStartRef.current = Date.now(); refresh(); setMyTurn(true); setAiThk(false); setPromo(null); SFX.undo() }
 
   const lastSAN = hist.length > 0 ? hist[hist.length-1].san : null
   const mIcon = blind?'🕶️':vsPC?'🤖':solo?'🧠':'👥'
@@ -465,6 +521,7 @@ export default function Game() {
           <button className="gicn" onClick={()=>setShowClockSelect(true)} title={online && !isHost ? 'Solo el anfitrión puede cambiar el tiempo' : 'Reloj'} disabled={online && !isHost}>⏱️</button>
           <button className="gicn" onClick={()=>{const m=toggleMute();setMuted(m)}} title={muted?'Activar sonido':'Silenciar'}>{muted?'🔇':'🔊'}</button>
           <button className="gicn" onClick={()=>setFlip(!flip)} title="Girar">{flip?'⬇':'🔄'}</button>
+          <button className="gicn" onClick={()=>setShowThemeSelect(true)} title="Tema del tablero">🎨</button>
         </div>
       </div>
 
@@ -495,6 +552,26 @@ export default function Game() {
             </span>
           </div>
 
+          {/* Material advantage bar */}
+          {(() => {
+            const maxAdv = 20
+            const pct = Math.min(Math.abs(adv) / maxAdv, 1) * 50
+            const isWhite = adv > 0
+            const show = adv !== 0
+            return (
+              <div style={{ width: '100%', maxWidth: 'var(--board-size)' }}>
+                <div className="mat-bar-wrap">
+                  <div className="mat-bar-center" />
+                  <div className={`mat-bar-fill mat-bar-white ${matPulse && show && isWhite ? 'mat-bar-glow-white mat-bar-pulse' : ''}`} style={{ left: '50%', width: show && isWhite ? `${pct}%` : '0%' }} />
+                  <div className={`mat-bar-fill mat-bar-black ${matPulse && show && !isWhite ? 'mat-bar-glow-black mat-bar-pulse' : ''}`} style={{ right: '50%', width: show && !isWhite ? `${pct}%` : '0%' }} />
+                </div>
+                <div className={`mat-bar-value ${show && Math.abs(adv) >= 3 ? 'mat-bar-value-ahead' : 'mat-bar-value-equal'} ${matPulse && show ? 'mat-bar-pulse' : ''}`}>
+                  {show ? (isWhite ? `Blancas +${adv}` : `Negras +${Math.abs(adv)}`) : 'Material igualado'}
+                </div>
+              </div>
+            )
+          })()}
+
           <div className="gboard-wrap">
             <Board
               board={blind&&blindBrd?blindBrd:brd}
@@ -506,6 +583,8 @@ export default function Game() {
               onSquareClick={clickSq}
               onPieceDrop={drop}
               isSelectable={myTurn||solo}
+              isCheckmate={status === 'CHECKMATE'}
+              boardTheme={boardTheme}
             />
 
             {/* Barra promoción */}
@@ -534,8 +613,9 @@ export default function Game() {
           </div>
         </div>
 
-        {/* Columna derecha: historial */}
+        {/* Columna derecha: gráfico + historial */}
         <div className="gright">
+          <EvalGraph evalHistory={evalHistory} currentMove={hist.length - 1} />
           <div className="ghist" ref={histRef}>
             {hist.length === 0 ? (
               <div className="gempty">
@@ -558,6 +638,7 @@ export default function Game() {
                         }
                         return t < 10 ? `${t.toFixed(1)}s` : `${Math.round(t)}s`
                       }
+
                       const wt = moveTimes[i]
                       const bt = moveTimes[i+1]
                       rows.push(
@@ -565,11 +646,11 @@ export default function Game() {
                           <td className="gn">{n}.</td>
                           <td className={`gs ${i===hist.length-1?'gs-last':''}`}>
                             {hist[i].san}
-                            {wt != null && <span className="gtime">{fmtTime(wt)}</span>}
+                            {wt != null && <span className={`gtime ${timeClass(wt)}`}>{fmtTime(wt)}</span>}
                           </td>
                           <td className={`gs ${i+1===hist.length-1?'gs-last':''}`}>
                             {hist[i+1]?.san||''}
-                            {bt != null && <span className="gtime">{fmtTime(bt)}</span>}
+                            {bt != null && <span className={`gtime ${timeClass(bt)}`}>{fmtTime(bt)}</span>}
                           </td>
                         </tr>
                       )
@@ -627,6 +708,24 @@ export default function Game() {
             />
             <button type="submit" disabled={!chatInput.trim()}>➤</button>
           </form>
+        </div>
+      )}
+
+      {/* ═══ MODAL TEMAS ═══ */}
+      {showThemeSelect && (
+        <div className="mover" onClick={()=>setShowThemeSelect(false)}>
+          <div className="min" onClick={e=>e.stopPropagation()}>
+            <h3>🎨 Tema del tablero</h3>
+            <div className="dopts">
+              {BOARD_THEMES.map(t => (
+                <button key={t.id} className={`dopt ${boardTheme===t.id?'dact':''}`} onClick={()=>changeBoardTheme(t.id)}>
+                  <span className="doi">{t.icon}</span>
+                  <span className="don">{t.name}</span>
+                  <span className="dod">{t.d}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

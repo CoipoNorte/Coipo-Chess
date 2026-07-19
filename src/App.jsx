@@ -2,6 +2,8 @@ import { Routes, Route, Link } from 'react-router-dom'
 import Home from './components/Home'
 import Lobby from './components/Lobby'
 import Game from './components/Game'
+import Puzzle from './components/Puzzle'
+import ErrorBoundary from './components/ErrorBoundary'
 import './App.css'
 
 function App() {
@@ -23,7 +25,8 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/lobby/:mode" element={<Lobby />} />
-          <Route path="/game/:mode" element={<Game />} />
+          <Route path="/game/:mode" element={<ErrorBoundary><Game /></ErrorBoundary>} />
+          <Route path="/puzzle" element={<Puzzle />} />
         </Routes>
       </main>
 

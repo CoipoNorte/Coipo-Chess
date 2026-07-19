@@ -15,13 +15,28 @@ function Board({
   onSquareClick,
   onPieceDrop,
   isSelectable = true,
+  isCheckmate = false,
+  boardTheme = 'classic',
 }) {
   const boardRef = useRef(null)
   const [drag, setDrag] = useState(null)
   const [hoverSq, setHoverSq] = useState(null)
   const [captureAnim, setCaptureAnim] = useState(null) // { square, color, type }
+  const [boardShake, setBoardShake] = useState(false)
+  const [captureFlashSq, setCaptureFlashSq] = useState(null)
+  const [landAnimSq, setLandAnimSq] = useState(null)
+  const [entryDone, setEntryDone] = useState(false)
   const prevLastMove = useRef(null)
   const captureTimerRef = useRef(null)
+  const shakeTimerRef = useRef(null)
+  const flashTimerRef = useRef(null)
+  const landTimerRef = useRef(null)
+
+  // Board entry animation — mark pieces as entered after a short delay
+  useEffect(() => {
+    const t = setTimeout(() => setEntryDone(true), 1200)
+    return () => clearTimeout(t)
+  }, [])
 
   const isWhite = !flipped
 
@@ -208,15 +223,28 @@ function Board({
       rookEl = animatePiece(rookFrom, rookTo)
     }
 
-    // Capture animation — ghost of captured piece fades out
+    // Capture animation — ghost of captured piece fades out + flash + shake
     if (lastMove.captured) {
       if (captureTimerRef.current) clearTimeout(captureTimerRef.current)
       setCaptureAnim({ square: lastMove.to, color: lastMove.color === 'w' ? 'b' : 'w', type: lastMove.captured })
+      // Flash on capture square
+      setCaptureFlashSq(lastMove.to)
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+      flashTimerRef.current = setTimeout(() => { setCaptureFlashSq(null); flashTimerRef.current = null }, 500)
+      // Board shake
+      setBoardShake(true)
+      if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current)
+      shakeTimerRef.current = setTimeout(() => { setBoardShake(false); shakeTimerRef.current = null }, 400)
       captureTimerRef.current = setTimeout(() => {
         setCaptureAnim(null)
         captureTimerRef.current = null
       }, 400)
     }
+
+    // Landing bounce animation on destination square
+    setLandAnimSq(lastMove.to)
+    if (landTimerRef.current) clearTimeout(landTimerRef.current)
+    landTimerRef.current = setTimeout(() => { setLandAnimSq(null); landTimerRef.current = null }, 350)
 
     // Phase 3: Clean up inline styles after animation
     animTimerRef.current = setTimeout(() => {
@@ -235,6 +263,9 @@ function Board({
       if (animTimerRef.current) { clearTimeout(animTimerRef.current); animTimerRef.current = null }
       if (animTimerRef2.current) { clearTimeout(animTimerRef2.current); animTimerRef2.current = null }
       if (captureTimerRef.current) { clearTimeout(captureTimerRef.current); captureTimerRef.current = null }
+      if (shakeTimerRef.current) { clearTimeout(shakeTimerRef.current); shakeTimerRef.current = null }
+      if (flashTimerRef.current) { clearTimeout(flashTimerRef.current); flashTimerRef.current = null }
+      if (landTimerRef.current) { clearTimeout(landTimerRef.current); landTimerRef.current = null }
     }
   }, [lastMove])
 
@@ -248,7 +279,7 @@ function Board({
   const cols = isWhite ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0]
 
   return (
-    <div className={`board ${flipped ? 'flipped' : ''}`} ref={boardRef}>
+    <div className={`board ${flipped ? 'flipped' : ''} ${boardShake ? 'board-shake' : ''}`} ref={boardRef} data-theme={boardTheme}>
       <div className="bgrid">
         {rows.map((r, rIdx) => (
           <div key={r} className="brow">
@@ -262,6 +293,13 @@ function Board({
               const isBottomRow = rIdx === 7
               const isLeftCol = cIdx === 0
 
+              // Stagger delay for entry animation based on position
+              const entryDelay = (rIdx * 8 + cIdx) * 12 // ~12ms per square
+              const isLanding = landAnimSq === sq
+              const isCaptureFlash = captureFlashSq === sq
+              // Checkmate defeat: animate the losing king
+              const isCheckmateKing = isCheckmate && p?.type === 'k' && checkSq.includes(sq)
+
               return (
                 <div
                   key={sq}
@@ -273,6 +311,7 @@ function Board({
                     sqCheck(sq) ? 'schk' : '',
                     isDragSq ? 'sdrag' : '',
                     isHover ? 'shover' : '',
+                    isCaptureFlash ? 'sq-capture-flash' : '',
                   ].filter(Boolean).join(' ')}
                   data-sq={sq}
                   onMouseDown={(e) => handleMouseDown(e, sq)}
@@ -280,7 +319,7 @@ function Board({
                   onClick={() => handleClick(sq)}
                 >
                   {p && !isDragSq && (
-                    <span className={`pce ${p.color === 'w' ? 'pw' : 'pb'} ${p._hidden ? 'phid' : ''}`}>
+                    <span className={`pce ${p.color === 'w' ? 'pw' : 'pb'} ${p._hidden ? 'phid' : ''} ${!entryDone ? 'pce-entry' : ''} ${isLanding ? 'pce-land' : ''} ${isCheckmateKing ? 'pce-checkmate-defeat' : ''}`} style={!entryDone ? { animationDelay: `${entryDelay}ms` } : undefined}>
                       {p._hidden
                         ? <ChessPiece color={p.color} type="p" />
                         : <ChessPiece color={p.color} type={p.type} />

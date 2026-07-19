@@ -3,6 +3,7 @@ import { useState } from 'react'
 import './Home.css'
 
 const GAME_MODES = [
+  // ─── ONLINE ───
   {
     id: 'pvp',
     icon: '👥',
@@ -11,6 +12,7 @@ const GAME_MODES = [
     color: '#4CAF50',
     route: '/lobby/pvp',
     badge: 'P2P',
+    section: 'online',
   },
   {
     id: 'blind',
@@ -20,7 +22,9 @@ const GAME_MODES = [
     color: '#9C27B0',
     route: '/lobby/blind',
     badge: 'Sigilo',
+    section: 'online',
   },
+  // ─── INDIVIDUAL ───
   {
     id: 'vspc',
     icon: '🤖',
@@ -29,6 +33,7 @@ const GAME_MODES = [
     color: '#FF9800',
     route: '/game/vspc',
     badge: 'IA',
+    section: 'solo',
   },
   {
     id: 'pc-levels',
@@ -38,6 +43,7 @@ const GAME_MODES = [
     color: '#F44336',
     route: '/game/pc-levels',
     badge: '3 niveles',
+    section: 'solo',
   },
   {
     id: 'solo',
@@ -47,6 +53,18 @@ const GAME_MODES = [
     color: '#2979FF',
     route: '/game/solo',
     badge: 'Práctica',
+    section: 'solo',
+  },
+  // ─── PUZZLES ───
+  {
+    id: 'puzzle',
+    icon: '🧩',
+    title: 'Puzzles Infinitos',
+    description: 'Resuelve tácticas infinitas como Lichess. Bifurcaciones, pinzas, mates y más.',
+    color: '#00BCD4',
+    route: '/puzzle',
+    badge: '∞',
+    section: 'puzzle',
   },
 ]
 
@@ -72,14 +90,86 @@ function Home() {
       </div>
 
       <div className="home-modes">
+        {/* ═══ ONLINE ═══ */}
         <div className="modes-header">
           <span className="modes-header-line" />
-          <span className="modes-header-text">MODOS DE JUEGO</span>
+          <span className="modes-header-text">🟢 ONLINE</span>
           <span className="modes-header-line" />
         </div>
-
         <div className="home-modes-grid">
-          {GAME_MODES.map((mode) => (
+          {GAME_MODES.filter(m => m.section === 'online').map((mode) => (
+            <button
+              key={mode.id}
+              className="mode-card"
+              style={{ '--mode-color': mode.color }}
+              onClick={() => navigate(mode.route)}
+            >
+              <div className="mode-card-accent" />
+              <div className="mode-card-icon" style={{ background: `${mode.color}18` }}>
+                <span>{mode.icon}</span>
+              </div>
+              <div className="mode-card-content">
+                <div className="mode-card-header">
+                  <h4 className="mode-card-title">{mode.title}</h4>
+                  <span className="mode-card-badge" style={{ background: `${mode.color}22`, color: mode.color }}>
+                    {mode.badge}
+                  </span>
+                </div>
+                <p className="mode-card-description">{mode.description}</p>
+              </div>
+              <div className="mode-card-arrow">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M6 3L11 8L6 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* ═══ INDIVIDUAL ═══ */}
+        <div className="modes-header">
+          <span className="modes-header-line" />
+          <span className="modes-header-text">🤖 INDIVIDUAL</span>
+          <span className="modes-header-line" />
+        </div>
+        <div className="home-modes-grid">
+          {GAME_MODES.filter(m => m.section === 'solo').map((mode) => (
+            <button
+              key={mode.id}
+              className="mode-card"
+              style={{ '--mode-color': mode.color }}
+              onClick={() => navigate(mode.route)}
+            >
+              <div className="mode-card-accent" />
+              <div className="mode-card-icon" style={{ background: `${mode.color}18` }}>
+                <span>{mode.icon}</span>
+              </div>
+              <div className="mode-card-content">
+                <div className="mode-card-header">
+                  <h4 className="mode-card-title">{mode.title}</h4>
+                  <span className="mode-card-badge" style={{ background: `${mode.color}22`, color: mode.color }}>
+                    {mode.badge}
+                  </span>
+                </div>
+                <p className="mode-card-description">{mode.description}</p>
+              </div>
+              <div className="mode-card-arrow">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M6 3L11 8L6 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* ═══ PUZZLES ═══ */}
+        <div className="modes-header">
+          <span className="modes-header-line" />
+          <span className="modes-header-text">🧩 PUZZLES</span>
+          <span className="modes-header-line" />
+        </div>
+        <div className="home-modes-grid">
+          {GAME_MODES.filter(m => m.section === 'puzzle').map((mode) => (
             <button
               key={mode.id}
               className="mode-card"

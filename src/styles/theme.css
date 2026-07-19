@@ -82,3 +82,31 @@
     --board-size: min(96vw, 420px);
   }
 }
+
+/* =============================================
+   🎨 Board Themes — data-theme attribute
+   ============================================= */
+
+/* Clásico (default) */
+[data-theme="classic"] {
+  --light-square: #F5F5DC;
+  --dark-square: #2F4F4F;
+}
+
+/* Oscuro */
+[data-theme="dark"] {
+  --light-square: #E0E0E0;
+  --dark-square: #538D4E;
+}
+
+/* Madera */
+[data-theme="wood"] {
+  --light-square: #E8C88A;
+  --dark-square: #8B5E3C;
+}
+
+/* Mármol */
+[data-theme="marble"] {
+  --light-square: #F0F0F5;
+  --dark-square: #6B7B8D;
+}
