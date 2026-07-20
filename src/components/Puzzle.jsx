@@ -13,9 +13,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ChessEngine from '../utils/chessEngine'
 import { getPuzzleGenerator, PUZZLE_THEMES, RATING_RANGES } from '../utils/puzzleGenerator'
+import { resolveBoardOrientation } from '../utils/boardOrientation'
 import Board from './Board'
 import { ChessPiece } from './ChessPieces'
 import * as SFX from '../utils/sounds'
+import { getCustomizationConfig } from '../utils/customization'
 import './Puzzle.css'
 
 // Pure helper — lives outside component to avoid re-creation
@@ -166,7 +168,7 @@ export default function Puzzle() {
       setPlayerColor(pColor)
       setTurn(turn)
       setBrd(eng.getBoard())
-      setFlip(pColor === 'b')
+      setFlip(pColor === 'b' ? false : false)
       setLoading(false)
 
       if (turn === pColor) {
@@ -250,6 +252,7 @@ export default function Puzzle() {
 
   // ─── Player tries a move ───
   const _tryMove = useCallback((from, to, promotionChoice) => {
+    if (wrongOverlayTimerRef.current) { clearTimeout(wrongOverlayTimerRef.current); wrongOverlayTimerRef.current = null }
     if (result || !puzzleRef.current || showSolution) return
     if (turn !== playerColor) return
     if (nextMoveIdx >= solution.length) return
@@ -341,6 +344,7 @@ export default function Puzzle() {
 
   // ─── Click on square ───
   const clickSq = useCallback((sq) => {
+    if (wrongOverlayTimerRef.current) { clearTimeout(wrongOverlayTimerRef.current); wrongOverlayTimerRef.current = null }
     if (result || loading || !puzzle || showSolution) return
     if (turn !== playerColor) return
     if (nextMoveIdx >= solution.length) return
@@ -449,7 +453,7 @@ export default function Puzzle() {
   }
 
   // ─── Rendering ───
-  const boardFlipped = playerColor === 'b' ? !flip : flip
+  const boardFlipped = resolveBoardOrientation(playerColor, flip)
   const themeInfo = puzzle?.theme ? PUZZLE_THEMES[puzzle.theme] : null
   const ratingInfo = Object.values(RATING_RANGES).find(r => puzzle?.rating >= r.min && puzzle?.rating <= r.max)
     || RATING_RANGES.easy

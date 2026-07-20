@@ -10,6 +10,7 @@ import ChessClock from './ChessClock'
 import EvalGraph from './EvalGraph'
 import * as SFX from '../utils/sounds'
 import { toggleMute } from '../utils/sounds'
+import { getCustomizationConfig, BOARD_THEMES, AMBIENT_THEMES, SOUND_PROFILES, saveCustomizationConfig } from '../utils/customization'
 import './Game.css'
 
 const PV = { q:9, r:5, b:3, n:3, p:1 }
@@ -21,12 +22,7 @@ const timeClass = (t) => {
   if (t < TIME_THRESHOLDS.verySlow) return 'gtime-slow'
   return 'gtime-very-slow'
 }
-const BOARD_THEMES = [
-  { id:'classic', icon:'♟️', name:'Clásico', d:'Beige & verde' },
-  { id:'dark', icon:'🌑', name:'Oscuro', d:'Blanco & verde intenso' },
-  { id:'wood', icon:'🪵', name:'Madera', d:'Cálido tono marrón' },
-  { id:'marble', icon:'🪨', name:'Mármol', d:'Blanco & gris elegante' },
-]
+
 
 export default function Game() {
   const { mode } = useParams()
@@ -58,15 +54,18 @@ export default function Game() {
   const [showDiff, setShowDiff] = useState(false)
   const [showGO, setShowGO] = useState(false)
   const [showThemeSelect, setShowThemeSelect] = useState(false)
+  const [showCustomSelect, setShowCustomSelect] = useState(false)
 
   const [goText, setGoText] = useState('')
   const [flip, setFlip] = useState(false)
+  const [ambientTheme, setAmbientTheme] = useState('none')
+  const [soundProfile, setSoundProfile] = useState('wood')
+  const [boardTheme, setBoardTheme] = useState(() => localStorage.getItem('coipo-board-theme') || 'classic')
   const [blindBrd, setBlindBrd] = useState(null)
   const boardFlipped = resolveBoardOrientation(pColor, flip)
   const [promo, setPromo] = useState(null) // { from, to }
   const [aiSt, setAiSt] = useState('…')
   const [muted, setMuted] = useState(false)
-  const [boardTheme, setBoardTheme] = useState(() => localStorage.getItem('coipo-board-theme') || 'classic')
   const changeBoardTheme = (id) => { setBoardTheme(id); localStorage.setItem('coipo-board-theme', id); setShowThemeSelect(false) }
   const [clockTime, setClockTime] = useState(300) // 5 minutes default
   const [clockIncrement, setClockIncrement] = useState(0)
@@ -82,6 +81,21 @@ export default function Game() {
   const [evalHistory, setEvalHistory] = useState([])
   const prevAdvRef = useRef(0)
   const matPulseTimerRef = useRef(null)
+
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        if (showGO) setShowGO(false)
+        else if (showThemeSelect) setShowThemeSelect(false)
+        else if (showClockSelect) setShowClockSelect(false)
+        else if (showDiff) setShowDiff(false)
+        else if (showCustomSelect) setShowCustomSelect(false)
+        else if (chatOpen) setChatOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [showGO, showThemeSelect, showClockSelect, showDiff, showCustomSelect, chatOpen])
 
   const routeState = loc.state || window.__coipoRouteState || {}
   const isHost = routeState.isHost ?? true
@@ -116,7 +130,14 @@ export default function Game() {
       if (vsPC && mode === 'pc-levels') setShowDiff(true)
     }
     if (vsPC) { const a = new AIPlayer(aiDiff); ai.current = a; a.init().then(()=>setAiSt('SF')).catch(()=>setAiSt('local')) }
+    // Cargar configuración de personalización modular
+    const customConfig = getCustomizationConfig()
+    setBoardTheme(customConfig.boardTheme || 'classic')
+    setSoundProfile(customConfig.soundProfile || 'wood')
+    setAmbientTheme(customConfig.ambientTheme || 'none')
+
     engine.reset(); refresh(pc)
+    setFlip(pc === 'b' ? false : false)
     console.log('[Game] Init mode:', mode, 'vsPC:', vsPC, 'pc:', pc, 'board:', engine.getBoard().length)
     setMoveTimes([])
     moveStartRef.current = Date.now()
@@ -155,6 +176,11 @@ export default function Game() {
     if (histRef.current) histRef.current.scrollTop = histRef.current.scrollHeight
   }, [hist.length])
 
+  // Material (debe ir antes del useEffect que usa adv)
+  const matVal = (c) => c.reduce((s,p)=>s+(PV[p]||0),0)
+  const wCap = matVal(caps.b), bCap = matVal(caps.w)
+  const adv = wCap - bCap
+
   // Material pulse animation when advantage changes significantly
   useEffect(() => {
     const diff = Math.abs(adv - prevAdvRef.current)
@@ -166,6 +192,40 @@ export default function Game() {
     prevAdvRef.current = adv
     return () => { if (matPulseTimerRef.current) clearTimeout(matPulseTimerRef.current) }
   }, [adv])
+
+  // Recalcular blind board al cambiar rotación o color local
+  useEffect(() => {
+    if (blind && engine) {
+      setBlindBrd(obfuscateBoard(engine.getBoard(), pColor))
+    }
+  }, [flip, pColor, blind, engine])
+
+  // Verificación y restablecimiento de conexión online (P2P)
+  useEffect(() => {
+    if (!online) return
+    const interval = setInterval(() => {
+      try {
+        if (!pm.current || !(pm.current.isConnected?.() ?? true)) {
+          const stRecovered = loc.state || window.__coipoRouteState || {}
+          const p = pm.current || stRecovered.peerManager || window.__coipoPeerManager
+          if (p && p !== pm.current) {
+            pm.current = p
+            p.onData(d => peerData(d))
+            p.onDisconnected(() => {
+              setGoText('Se perdió la conexión con el rival — reintentando...')
+              setTimeout(() => setGoText('Se perdió la conexión con el rival'), 5000)
+            })
+          } else if (!p) {
+            setGoText('Conexión perdida — redirigiendo...')
+            setTimeout(() => nav('/'), 3000)
+          }
+        }
+      } catch (e) {
+        console.warn('Error al verificar conexión P2P:', e)
+      }
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [online, peerData, nav, loc])
 
   const gameOver = useCallback((st) => {
     let r = ''; const w = engine.getTurn()==='w'?'Negras':'Blancas'
@@ -356,7 +416,7 @@ export default function Game() {
     clockRef.current?.resetClock()
     syncClock(time, increment)
   }
-  const newGame = () => { aiCancelRef.current = true; engine.reset(); setSel(null); setLegal([]); setLastM(null); setChk([]); setStatus('PLAYING'); setShowGO(false); setGoText(''); setMyTurn(true); setAiThk(false); setPromo(null); setClockRunning(false); setMoveTimes([]); setEvalHistory([]); moveStartRef.current = Date.now(); clockRef.current?.resetClock(); refresh(); SFX.gameStart() }
+  const newGame = () => { aiCancelRef.current = true; engine.reset(); setFlip(pColor === 'b' ? false : false); setSel(null); setLegal([]); setLastM(null); setChk([]); setStatus('PLAYING'); setShowGO(false); setGoText(''); setMyTurn(true); setAiThk(false); setPromo(null); setClockRunning(false); setMoveTimes([]); setEvalHistory([]); moveStartRef.current = Date.now(); clockRef.current?.resetClock(); refresh(); SFX.gameStart() }
   const goHome = () => { aiCancelRef.current = true; try { pm.current?.disconnect() } catch(e) {}; nav('/') }
   const undo = () => { if (!local || hist.length===0 || aiThk) return; aiCancelRef.current = true; engine.undo(); if (vsPC && hist.length >= 2) engine.undo(); setMoveTimes(prev => prev.slice(0, vsPC ? -2 : -1)); setEvalHistory(prev => prev.slice(0, prev.length - (vsPC ? 2 : 1))); moveStartRef.current = Date.now(); refresh(); setMyTurn(true); setAiThk(false); setPromo(null); SFX.undo() }
 
@@ -400,11 +460,6 @@ export default function Game() {
     setShowGO(true)
     SFX.gameOver()
   }, [])
-
-  // Material
-  const matVal = (c) => c.reduce((s,p)=>s+(PV[p]||0),0)
-  const wCap = matVal(caps.b), bCap = matVal(caps.w)
-  const adv = wCap - bCap
 
   // ─── PGN Export ───
   const generatePGN = useCallback(() => {
@@ -522,6 +577,7 @@ export default function Game() {
           <button className="gicn" onClick={()=>{const m=toggleMute();setMuted(m)}} title={muted?'Activar sonido':'Silenciar'}>{muted?'🔇':'🔊'}</button>
           <button className="gicn" onClick={()=>setFlip(!flip)} title="Girar">{flip?'⬇':'🔄'}</button>
           <button className="gicn" onClick={()=>setShowThemeSelect(true)} title="Tema del tablero">🎨</button>
+          <button className="gicn" onClick={() => setShowCustomSelect(true)} title="Personalización completa">⚙️</button>
         </div>
       </div>
 
@@ -777,10 +833,69 @@ export default function Game() {
         </div>
       )}
 
+      {/* ═══ MODAL PERSONALIZACIÓN COMPLETA ═══ */}
+      {showCustomSelect && (
+        <div className="mover" onClick={() => setShowCustomSelect(false)}>
+          <div className="min" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px', width: '92%' }}>
+            <h3>⚙️ Personalización completa</h3>
+            <div style={{ marginBottom: '14px', fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+              Totalmente modular — ideal para futuros mods gráficos
+            </div>
+
+            {/* Tablero */}
+            <div className="pz-filter-section">
+              <span className="pz-filter-label">Tablero</span>
+              <div className="pz-filter-chips">
+                {BOARD_THEMES.map(t => (
+                  <button key={t.id} className={`pz-chip ${boardTheme === t.id ? 'pz-chip-active' : ''}`}
+                    onClick={() => { setBoardTheme(t.id); localStorage.setItem('coipo-board-theme', t.id); }}>
+                    {t.icon} {t.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Ambiente */}
+            <div className="pz-filter-section">
+              <span className="pz-filter-label">Ambiente</span>
+              <div className="pz-filter-chips">
+                {AMBIENT_THEMES.map(a => (
+                  <button key={a.id} className={`pz-chip ${ambientTheme === a.id ? 'pz-chip-active' : ''}`}
+                    onClick={() => setAmbientTheme(a.id)}>
+                    {a.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sonido */}
+            <div className="pz-filter-section">
+              <span className="pz-filter-label">Perfil de sonido</span>
+              <div className="pz-filter-chips">
+                {SOUND_PROFILES.map(s => (
+                  <button key={s.id} className={`pz-chip ${soundProfile === s.id ? 'pz-chip-active' : ''}`}
+                    onClick={() => setSoundProfile(s.id)}>
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Guardar */}
+            <button className="pz-apply" onClick={() => {
+              saveCustomizationConfig({ boardTheme, ambientTheme, soundProfile, pieceStyle: 'standard', animations: true })
+              setShowCustomSelect(false)
+            }} style={{ marginTop: '4px' }}>
+              💾 Guardar configuración
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ═══ GAME OVER ═══ */}
       {showGO && (
-        <div className="mover">
-          <div className="min goin">
+        <div className="mover" onClick={() => setShowGO(false)}>
+          <div className="min goin" onClick={e => e.stopPropagation()}>
             <div className="goic">{goText.includes('Tablas')?'🤝':goText.includes('rendiste')?'🏳️':'👑'}</div>
             <h3>Fin</h3>
             <p className="got">{goText}</p>

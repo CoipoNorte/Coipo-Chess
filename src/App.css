@@ -1,126 +1,138 @@
 /* =============================================
-   COIPO CHESS - App Layout Premium
+   COIPO CHESS - App Layout Premium v3
    ============================================= */
 
 .app {
   min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: row;
+  background:
+    radial-gradient(ellipse at 15% 40%, rgba(47, 79, 79, 0.1) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 10%, rgba(255, 215, 0, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 90%, rgba(47, 79, 79, 0.08) 0%, transparent 60%),
+    linear-gradient(180deg, #0D0D12 0%, #121218 100%);
+  color: var(--text-primary);
+}
+
+/* ── Sidebar ── */
+.app-sidebar {
+  width: 220px;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(ellipse at 20% 50%, rgba(47, 79, 79, 0.08) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(255, 215, 0, 0.03) 0%, transparent 50%),
-    var(--bg-general);
-}
-
-/* ── Header ── */
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 28px;
-  background: rgba(18, 18, 18, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--glass-border);
+  background: rgba(13, 13, 18, 0.85);
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 28px 14px 20px;
   position: sticky;
   top: 0;
-  z-index: 100;
-  box-shadow: 0 1px 20px rgba(0, 0, 0, 0.3);
+  align-self: flex-start;
+  z-index: 90;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
 }
 
-.app-logo-link {
+.app-sidebar .app-logo {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.app-sidebar .app-logo-link {
+  justify-content: center;
+  gap: 8px;
+}
+
+.app-sidebar .app-logo h1 {
+  font-size: 1.15rem;
+  letter-spacing: -0.6px;
+}
+
+.app-nav-vertical {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-  color: inherit;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
 }
 
-.app-logo-icon {
-  font-size: 1.8rem;
-  line-height: 1;
-  transition: transform 0.3s;
-}
-
-.app-logo-link:hover .app-logo-icon {
-  transform: rotate(15deg) scale(1.05);
-}
-
-.app-logo h1 {
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.3px;
-  background: linear-gradient(135deg, #F0F0F0, #FFD700);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.app-nav {
-  display: flex;
-  gap: 4px;
-}
-
-.nav-link {
-  color: var(--text-secondary);
+.app-nav-vertical .nav-link {
+  display: block;
+  padding: 10px 14px;
   font-size: 0.88rem;
-  padding: 6px 14px;
-  border-radius: var(--border-radius);
-  transition: all 0.2s;
+  text-align: left;
+  border-radius: 10px;
+  color: var(--text-secondary);
   text-decoration: none;
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
 }
 
-.nav-link:hover {
+.app-nav-vertical .nav-link:hover,
+.app-nav-vertical .nav-link.active {
   color: var(--text-primary);
-  background: var(--btn-ghost-hover);
+  background: rgba(255, 255, 255, 0.04);
+  border-left-color: var(--accent-gold);
 }
 
-/* ── Main ── */
+.sidebar-spacer {
+  flex: 1;
+}
+
+.app-sidebar-footer {
+  text-align: center;
+  padding-top: 16px;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ── Main (ocupa todo el espacio vertical disponible) ── */
 .app-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 28px 20px;
+  padding: 28px 28px 36px;
+  width: 100%;
+  min-height: calc(100vh - 220px);
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
-/* ── Footer ── */
-.app-footer {
-  text-align: center;
-  padding: 14px;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  border-top: 1px solid var(--border-color);
-  margin-top: auto;
-  letter-spacing: 0.3px;
+/* ── Responsive (sidebar se adapta o pasa a columna) ── */
+@media (max-width: 1024px) {
+  .app-sidebar { width: 180px; padding: 20px 10px 16px; }
+  .app-nav-vertical .nav-link { padding: 9px 10px; font-size: 0.82rem; }
+  .app-main { padding: 20px 16px 28px; }
 }
 
-/* ── Responsive ── */
 @media (max-width: 768px) {
-  .app-header {
-    padding: 10px 14px;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
+  .app { flex-direction: column; }
+  .app-sidebar {
+    width: 100%;
+    min-height: auto;
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 16px;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    gap: 16px;
   }
-  .app-logo-link {
-    justify-content: center;
-  }
-  .app-logo h1 { font-size: 1.08rem; }
-  .app-nav {
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-  .nav-link {
-    padding: 6px 10px;
-    font-size: 0.82rem;
-  }
-  .app-main { padding: 14px 8px 18px; }
+  .app-sidebar .app-logo { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+  .app-nav-vertical { flex-direction: row; flex-wrap: wrap; gap: 6px; flex: 1; justify-content: center; }
+  .app-nav-vertical .nav-link { padding: 7px 12px; font-size: 0.8rem; border-left: none; border-bottom: 3px solid transparent; }
+  .app-nav-vertical .nav-link:hover,
+  .app-nav-vertical .nav-link.active { border-left-color: transparent; border-bottom-color: var(--accent-gold); }
+  .sidebar-spacer { display: none; }
+  .app-sidebar-footer { display: none; }
+  .app-main { padding: 16px 10px 24px; min-height: calc(100vh - 80px); }
 }
 
 @media (max-width: 480px) {
-  .app-header { padding: 10px 10px 12px; }
-  .app-main { padding: 10px 6px 16px; }
-  .nav-link { flex: 1; text-align: center; }
+  .app-sidebar { padding: 8px 10px; gap: 8px; }
+  .app-sidebar .app-logo h1 { font-size: 1rem; }
+  .app-nav-vertical .nav-link { padding: 6px 8px; font-size: 0.75rem; }
+  .app-main { padding: 12px 6px 20px; }
 }

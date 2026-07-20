@@ -9,17 +9,25 @@ import './App.css'
 function App() {
   return (
     <div className="app">
-      <header className="app-header">
+      <aside className="app-sidebar">
         <div className="app-logo">
           <Link to="/" className="app-logo-link">
             <span className="app-logo-icon">♟</span>
             <h1>Coipo Chess</h1>
           </Link>
         </div>
-        <nav className="app-nav">
+        <nav className="app-nav-vertical">
           <Link to="/" className="nav-link">Inicio</Link>
+          <Link to="/lobby/vspc" className="nav-link">vs PC</Link>
+          <Link to="/lobby/solo" className="nav-link">Solo</Link>
+          <Link to="/lobby/pvp" className="nav-link">Online</Link>
+          <Link to="/puzzle" className="nav-link">Puzzle</Link>
         </nav>
-      </header>
+        <div className="sidebar-spacer" />
+        <footer className="app-sidebar-footer">
+          <p>© {new Date().getFullYear()}</p>
+        </footer>
+      </aside>
 
       <main className="app-main">
         <Routes>
@@ -29,10 +37,6 @@ function App() {
           <Route path="/puzzle" element={<Puzzle />} />
         </Routes>
       </main>
-
-      <footer className="app-footer">
-        <p>Coipo Chess &copy; {new Date().getFullYear()} — Ajedrez P2P sin servidores</p>
-      </footer>
     </div>
   )
 }

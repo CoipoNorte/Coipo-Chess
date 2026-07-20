@@ -1,36 +1,38 @@
 /* =============================================
-   🎨 COIPO CHESS - Paleta de Colores Premium v2
+   🎨 COIPO CHESS - Paleta de Colores Premium v3
    ============================================= */
 
 :root {
-  /* ── Tablero ── */
-  --light-square:      #F5F5DC;  /* Beige suave */
-  --dark-square:       #2F4F4F;  /* Gris verdoso profundo */
+  /* ── Tablero (base — se sobrescribe con data-theme) ── */
+  --light-square:      #F5F5DC;
+  --dark-square:       #2F4F4F;
+  --dark-accent:       #3A6A6A;
+  --light-accent:      #EAE0C0;
 
   /* ── Piezas ── */
-  --light-pieces:      #FFFFFF;  /* Blanco puro */
-  --dark-pieces:       #1C1C1C;  /* Negro carbón */
+  --light-pieces:      #FFFFFF;
+  --dark-pieces:       #1C1C1C;
   --piece-shadow:      0 2px 8px rgba(0,0,0,0.25);
 
-  /* ── Resaltos y alertas ── */
-  --highlight-move:    #FFD700;  /* Dorado brillante */
-  --last-move:         #FF4500;  /* Naranja intenso */
-  --check-alert:       #DC143C;  /* Rojo carmesí */
+  /* ── Resaltos ── */
+  --highlight-move:    #FFD700;
+  --last-move:         #FF6A00;
+  --check-alert:       #DC143C;
   --selected-square:   rgba(255, 215, 0, 0.45);
   --premove-square:    rgba(100, 200, 255, 0.3);
 
   /* ── Fondo y glassmorphism ── */
-  --bg-general:        #0D0D0D;  /* Casi negro profundo */
-  --bg-card:           rgba(30, 30, 30, 0.85);
-  --bg-card-hover:     rgba(42, 42, 42, 0.9);
+  --bg-general:        #0D0D12;
+  --bg-card:           rgba(25, 25, 30, 0.9);
+  --bg-card-hover:     rgba(35, 35, 40, 0.95);
   --glass-border:      rgba(255, 255, 255, 0.06);
   --glass-shadow:      0 8px 32px rgba(0, 0, 0, 0.4);
   --glass-blur:        12px;
 
   /* ── Texto ── */
-  --text-primary:      #F0F0F0;
-  --text-secondary:    #A0A0A0;
-  --text-muted:        #606060;
+  --text-primary:      #F2F0EB;
+  --text-secondary:    #B0A8A0;
+  --text-muted:        #6A6560;
 
   /* ── Bordes ── */
   --border-color:      rgba(255, 255, 255, 0.08);
@@ -56,30 +58,39 @@
   --btn-ghost-hover:   rgba(255, 255, 255, 0.1);
 
   /* ── Fuentes ── */
-  --font-main:         'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono:         'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  --font-main:         'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:         'JetBrains Mono', 'Fira Code', 'SF Mono', 'Courier New', monospace;
   --font-display:      'Inter', sans-serif;
 
   /* ── Tamaños ── */
-  --board-size:        clamp(280px, 82vw, 560px);
+  --board-size:        min(88vw, 520px);
   --piece-size:        calc(var(--board-size) / 8);
-  --border-radius:     10px;
-  --border-radius-lg:  16px;
-  --radius-sm:         6px;
+  --border-radius:     12px;
+  --border-radius-lg:  20px;
+  --radius-sm:         8px;
   --shadow-card:       0 8px 32px rgba(0, 0, 0, 0.5);
   --shadow-board:      0 12px 48px rgba(0, 0, 0, 0.6);
   --shadow-glow-gold:  0 0 20px rgba(255, 215, 0, 0.15);
 }
 
+/* Responsive global */
+@media (max-width: 1024px) {
+  :root {
+    --board-size: min(92vw, 480px);
+  }
+}
+
 @media (max-width: 768px) {
   :root {
-    --board-size: min(94vw, 480px);
+    --board-size: min(94vw, 440px);
+    --border-radius: 8px;
+    --border-radius-lg: 14px;
   }
 }
 
 @media (max-width: 480px) {
   :root {
-    --board-size: min(96vw, 420px);
+    --board-size: min(96vw, 380px);
   }
 }
 
@@ -87,26 +98,37 @@
    🎨 Board Themes — data-theme attribute
    ============================================= */
 
-/* Clásico (default) */
 [data-theme="classic"] {
   --light-square: #F5F5DC;
   --dark-square: #2F4F4F;
+  --dark-accent: #3A6A5A;
+  --light-accent: #EAE0C8;
 }
 
-/* Oscuro */
 [data-theme="dark"] {
-  --light-square: #E0E0E0;
-  --dark-square: #538D4E;
+  --light-square: #EAE6D8;
+  --dark-square: #4A7A5A;
+  --dark-accent: #356A4A;
+  --light-accent: #D8D6C8;
 }
 
-/* Madera */
 [data-theme="wood"] {
-  --light-square: #E8C88A;
-  --dark-square: #8B5E3C;
+  --light-square: #F0DEB8;
+  --dark-square: #8B6F47;
+  --dark-accent: #6B4A2A;
+  --light-accent: #E8C898;
 }
 
-/* Mármol */
 [data-theme="marble"] {
   --light-square: #F0F0F5;
-  --dark-square: #6B7B8D;
+  --dark-square: #7A8C8C;
+  --dark-accent: #5A6C7C;
+  --light-accent: #E0E0EB;
+}
+
+[data-theme="ocean"] {
+  --light-square: #DCE8F2;
+  --dark-square: #2A6A8A;
+  --dark-accent: #1A4A6A;
+  --light-accent: #C0DAF0;
 }

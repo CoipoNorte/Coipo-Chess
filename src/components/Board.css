@@ -359,7 +359,25 @@
 [data-theme="marble"] .sl .sq-file, [data-theme="marble"] .sl .sq-rank { color: #5A6A7A; }
 [data-theme="marble"] .sd .sq-file, [data-theme="marble"] .sd .sq-rank { color: rgba(255,255,255,0.6); }
 
-/* ─── Responsive ─── */
+/* ═══ Victory Celebration — fireworks-style sparkles on win ═══ */
+@keyframes victorySpark {
+  0% { opacity: 0; transform: translate(0, 0) scale(0); }
+  10% { opacity: 1; transform: translate(var(--spark-x), var(--spark-y)) scale(1); }
+  90% { opacity: 0.8; }
+  100% { opacity: 0; transform: translate(var(--spark-x), var(--spark-y)) scale(0.3); }
+}
+
+.victory-spark {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 100;
+  animation: victorySpark 0.8s ease-out forwards;
+}
+
+/* ═══ Responsive ─── */
 @media (max-width: 600px) {
   .lmc { border-width: 3px; }
   .chess-piece-svg { width: 90%; height: 90%; }
