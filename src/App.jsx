@@ -1,4 +1,5 @@
 import { Routes, Route, Link } from 'react-router-dom'
+import { useState } from 'react'
 import Home from './components/Home'
 import Lobby from './components/Lobby'
 import Game from './components/Game'
@@ -7,14 +8,16 @@ import ErrorBoundary from './components/ErrorBoundary'
 import './App.css'
 
 function App() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   return (
     <div className="app">
-      <aside className="app-sidebar">
+      <aside className={sidebarCollapsed ? 'app-sidebar collapsed' : 'app-sidebar'}>
         <div className="app-logo">
           <Link to="/" className="app-logo-link">
             <span className="app-logo-icon">♟</span>
             <h1>Coipo Chess</h1>
           </Link>
+          <button className="collapse-btn" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title="Colapsar sidebar">{sidebarCollapsed ? '☰' : '✕'}</button>
         </div>
         <nav className="app-nav-vertical">
           <Link to="/" className="nav-link">Inicio</Link>

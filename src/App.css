@@ -38,6 +38,7 @@
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  position: relative;
 }
 
 .app-sidebar .app-logo-link {
@@ -67,6 +68,9 @@
   text-decoration: none;
   transition: all 0.2s ease;
   border-left: 3px solid transparent;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
 }
 
 .app-nav-vertical .nav-link:hover,
@@ -78,6 +82,28 @@
 
 .sidebar-spacer {
   flex: 1;
+}
+
+.collapse-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 4px 10px;
+  transition: all 0.2s ease;
+  z-index: 95;
+}
+.collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text-primary);
+}
+.app-sidebar.collapsed {
+  display: none;
 }
 
 .app-sidebar-footer {
