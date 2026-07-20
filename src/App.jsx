@@ -17,7 +17,6 @@ const SECTIONS = [
     title: 'Individuales',
     items: [
       { to: '/lobby/vspc',      icon: '🤖', label: 'vs PC' },
-      { to: '/lobby/pc-levels', icon: '🎯', label: 'PC Niveles' },
       { to: '/lobby/solo',      icon: '🧠', label: 'Solo' },
     ],
   },

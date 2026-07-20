@@ -83,6 +83,8 @@ export default function Puzzle() {
   const timerValRef = useRef(0) // Ref mirror of timer for useCallback deps
   const solutionTimerRef = useRef([]) // Array of timeout IDs for playback
 
+  const initialTurnRef = useRef('w') // Turn from the initial FEN (never changes per puzzle)
+
   // ─── Helpers ───
   const _applyMoveToBoard = (eng) => {
     setBrd(eng.getBoard())
@@ -97,11 +99,10 @@ export default function Puzzle() {
   }), [])
 
   const _isPlayerTurn = useCallback((idx) => {
-    // If player moves first (turn === pColor), player indices are even (0, 2, 4...)
-    // If opponent moves first (turn !== pColor), player indices are odd (1, 3, 5...)
-    const playerMovesFirst = turn === playerColor
+    // Use the INITIAL turn (from FEN), NOT the current turn which changes after each move
+    const playerMovesFirst = initialTurnRef.current === playerColor
     return playerMovesFirst ? (idx % 2 === 0) : (idx % 2 === 1)
-  }, [turn, playerColor])
+  }, [playerColor])
 
   // ─── Load next puzzle ───
   const loadNextPuzzle = useCallback(async (opts = {}) => {
@@ -174,6 +175,7 @@ export default function Puzzle() {
       puzzleRef.current = p
       setSolution(sol)
       setPlayerColor(pColor)
+      initialTurnRef.current = turn // critical: store initial turn for _isPlayerTurn
       setTurn(turn)
       setBrd(eng.getBoard())
       setFlip(false)

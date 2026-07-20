@@ -106,6 +106,18 @@ export default function Game() {
   const prevAdvRef = useRef(0)
   const matPulseTimerRef = useRef(null)
 
+  const routeState = loc.state || window.__coipoRouteState || {}
+  const isHost = routeState.isHost ?? true
+  const isHostRef = useRef(isHost)
+
+  const vsPC  = mode === 'vspc' || mode === 'pc-levels'
+  const solo  = mode === 'solo'
+  const blind = mode === 'blind'
+  const online = mode === 'pvp' || mode === 'blind'
+  const local = vsPC || solo
+  const premoveEnabled = online || vsPC
+  const isViewingHistory = viewingMove >= 0 && viewingMove < hist.length
+
   useEffect(() => {
     const handleKeys = (e) => {
       // Escape always works
@@ -153,33 +165,11 @@ export default function Game() {
         return
       }
 
-      // ←/→: navigate moves
-      if (e.key === 'ArrowLeft' && hist.length > 0) {
-        e.preventDefault()
-        navigateToMove(viewingMove - 1)
-        return
-      }
-      if (e.key === 'ArrowRight' && hist.length > 0) {
-        e.preventDefault()
-        navigateToMove(viewingMove + 1)
-        return
-      }
+
     }
     window.addEventListener('keydown', handleKeys)
     return () => window.removeEventListener('keydown', handleKeys)
-  }, [showGO, showThemeSelect, showClockSelect, showDiff, showCustomSelect, chatOpen, premove, premoveSrc, hintMove, vsPC, aiThk, local, status, hist.length, viewingMove])
-
-  const routeState = loc.state || window.__coipoRouteState || {}
-  const isHost = routeState.isHost ?? true
-  const isHostRef = useRef(isHost)
-
-  const vsPC  = mode === 'vspc' || mode === 'pc-levels'
-  const solo  = mode === 'solo'
-  const blind = mode === 'blind'
-  const online = mode === 'pvp' || mode === 'blind'
-  const local = vsPC || solo
-  const premoveEnabled = online || vsPC
-  const isViewingHistory = viewingMove >= 0 && viewingMove < hist.length
+  }, [showGO, showThemeSelect, showClockSelect, showDiff, showCustomSelect, chatOpen, premove, premoveSrc, hintMove, vsPC, aiThk, local, status])
 
   // Init
   useEffect(() => {

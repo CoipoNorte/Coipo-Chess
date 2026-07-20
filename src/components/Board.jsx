@@ -38,6 +38,7 @@ function Board({
   const flashTimerRef = useRef(null)
   const landTimerRef = useRef(null)
   const lastHoveredSqRef = useRef(null) // Throttle: only play hover sound on new piece
+  const [keyFocusSq, setKeyFocusSq] = useState(null) // keyboard-focused square
 
   // Board entry animation
   useEffect(() => {
@@ -95,6 +96,63 @@ function Board({
     const c = isWhite ? col : 7 - col
     return board?.[r]?.[c] || null
   }, [board, isWhite])
+
+  // ─── Keyboard navigation helpers ───
+  const sqToVisual = useCallback((sq) => {
+    if (!sq || sq.length < 2) return { vRow: 0, vCol: 0 }
+    const file = sq[0], rank = sq[1]
+    const boardCol = FILES.indexOf(file)
+    const boardRow = RANKS.indexOf(rank)
+    return {
+      vRow: isWhite ? boardRow : 7 - boardRow,
+      vCol: isWhite ? boardCol : 7 - boardCol
+    }
+  }, [isWhite])
+
+  const visualToSq = useCallback((vRow, vCol) => {
+    const br = isWhite ? vRow : 7 - vRow
+    const bc = isWhite ? vCol : 7 - vCol
+    return FILES[bc] + RANKS[br]
+  }, [isWhite])
+
+  // Default entry square for keyboard (center of board, respects flip)
+  const defaultKeySq = visualToSq(4, 4)
+  // Always keep one square tabbable so Tab can reach the board
+  const activeFocusSq = keyFocusSq || defaultKeySq
+
+  // ─── Keyboard handler ───
+  const handleKeyDown = useCallback((e) => {
+    const sq = keyFocusSq
+    if (!sq) return
+
+    const { vRow, vCol } = sqToVisual(sq)
+    let nRow = vRow, nCol = vCol
+
+    switch (e.key) {
+      case 'ArrowUp':    e.preventDefault(); nRow = Math.max(0, vRow - 1); break
+      case 'ArrowDown':  e.preventDefault(); nRow = Math.min(7, vRow + 1); break
+      case 'ArrowLeft':  e.preventDefault(); nCol = Math.max(0, vCol - 1); break
+      case 'ArrowRight': e.preventDefault(); nCol = Math.min(7, vCol + 1); break
+      case ' ':
+      case 'Enter':
+        e.preventDefault()
+        onSquareClick?.(sq)
+        return
+      case 'Escape':
+        e.preventDefault()
+        setKeyFocusSq(null)
+        return
+      default:
+        return
+    }
+
+    const newSq = visualToSq(nRow, nCol)
+    if (newSq === sq) return // clamp prevented movement
+    setKeyFocusSq(newSq)
+    // Move browser focus to the new square element
+    const el = boardRef.current?.querySelector(`[data-sq="${newSq}"]`)
+    el?.focus()
+  }, [keyFocusSq, onSquareClick, sqToVisual, visualToSq])
 
   // ─── Mouse drag ───
   const handleMouseDown = useCallback((e, square) => {
@@ -196,12 +254,6 @@ function Board({
       window.removeEventListener('touchend', handleUp)
     }
   }, [drag, sqFromPos, onPieceDrop, onSquareClick])
-
-  // ─── Click (cuando no hay drag) ───
-  const handleClick = useCallback((sq) => {
-    if (drag) return
-    onSquareClick?.(sq)
-  }, [onSquareClick, drag])
 
   // ─── Piece move animation (immediate, no delay) ───
   const animTimerRef = useRef(null)
@@ -315,39 +367,6 @@ function Board({
   const sqCapturable = (sq) => capturableSq.includes(sq)
   const isAnyCheck = checkSq.length > 0
 
-  // ─── Last move arrow — compute pixel positions ───
-  const [lastArrow, setLastArrow] = useState(null)
-  const prevArrowRef = useRef(null)
-
-  useLayoutEffect(() => {
-    if (!lastMove || !boardRef.current) {
-      setLastArrow(null)
-      prevArrowRef.current = lastMove
-      return
-    }
-    if (prevArrowRef.current === lastMove) return
-    prevArrowRef.current = lastMove
-
-    const fromEl = boardRef.current.querySelector(`[data-sq="${lastMove.from}"]`)
-    const toEl = boardRef.current.querySelector(`[data-sq="${lastMove.to}"]`)
-    if (!fromEl || !toEl) return
-
-    const boardRect = boardRef.current.getBoundingClientRect()
-    const fromRect = fromEl.getBoundingClientRect()
-    const toRect = toEl.getBoundingClientRect()
-
-    const bw = parseFloat(getComputedStyle(boardRef.current).borderWidth) || 0
-    const sqSize = fromRect.width
-
-    const x1 = fromRect.left - boardRect.left - bw + sqSize / 2
-    const y1 = fromRect.top - boardRect.top - bw + sqSize / 2
-    const x2 = toRect.left - boardRect.left - bw + sqSize / 2
-    const y2 = toRect.top - boardRect.top - bw + sqSize / 2
-
-    setLastArrow({ x1, y1, x2, y2 })
-  }, [lastMove])
-
-
   // Siempre iterar de arriba a abajo e izquierda a derecha visualmente.
   // getCoords/pieceAt ya manejan la rotación a través de isWhite.
   const rows = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -397,9 +416,11 @@ function Board({
                     isCaptureFlash ? 'sq-capture-flash' : '',
                   ].filter(Boolean).join(' ')}
                   data-sq={sq}
+                  tabIndex={activeFocusSq === sq ? 0 : -1}
+                  onKeyDown={handleKeyDown}
+                  onFocus={() => { if (keyFocusSq !== sq) setKeyFocusSq(sq) }}
                   onMouseDown={(e) => handleMouseDown(e, sq)}
                   onTouchStart={(e) => handleTouchStart(e, sq)}
-                  onClick={() => handleClick(sq)}
                 >                    {p && !isDragSq && (
                     <span
                       className={`pce ${p.color === 'w' ? 'pw' : 'pb'} ${p._hidden ? 'phid' : ''} ${!entryDone ? 'pce-entry' : ''} ${isLanding ? 'pce-land' : ''} ${isCheckmateKing ? 'pce-checkmate-defeat' : ''} ${sqCheck(sq) ? 'pce-check-pulse' : ''}`}
@@ -460,26 +481,6 @@ function Board({
           </div>
         )
       })()}
-
-      {/* Last move arrow overlay */}
-      {lastArrow && (
-        <svg className="last-arrow" width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 5 }}>
-          <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-              <polygon points="0 0, 10 3.5, 0 7" fill="rgba(255,215,0,0.6)" />
-            </marker>
-          </defs>
-          <line
-            x1={lastArrow.x1} y1={lastArrow.y1}
-            x2={lastArrow.x2} y2={lastArrow.y2}
-            stroke="rgba(255,215,0,0.5)"
-            strokeWidth={Math.max(4, Math.min(10, (lastArrow.x2 - lastArrow.x1) * 0.06))}
-            strokeLinecap="round"
-            markerEnd="url(#arrowhead)"
-            className="la-line"
-          />
-        </svg>
-      )}
 
       {/* Victory sparkles */}
       {isCheckmate && victorySparkles.map((s, i) => (
