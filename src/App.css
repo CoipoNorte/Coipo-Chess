@@ -105,7 +105,14 @@
   color: var(--text-primary);
 }
 .app-sidebar.collapsed {
-  display: none;
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+  padding: 0;
+  border-right: none;
+  box-shadow: none;
+  min-height: 0;
+  transition: all 0.3s ease;
 }
 
 .app-sidebar-footer {
