@@ -71,6 +71,7 @@
   overflow: hidden;
   position: relative;
   cursor: pointer;
+  user-select: none;
 }
 
 .app-nav-vertical .nav-link:hover,
@@ -94,6 +95,7 @@
   color: var(--text-secondary);
   font-size: 0.9rem;
   cursor: pointer;
+  user-select: none;
   padding: 4px 10px;
   transition: all 0.2s ease;
   z-index: 95;
