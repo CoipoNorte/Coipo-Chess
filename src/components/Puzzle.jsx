@@ -58,6 +58,8 @@ export default function Puzzle() {
   const wrongOverlayTimerRef = useRef(null)
   const [showHint, setShowHint] = useState(false)
   const [showSolution, setShowSolution] = useState(false)
+  const [solutionPlaying, setSolutionPlaying] = useState(false)
+  const [solutionProgress, setSolutionProgress] = useState({ current: 0, total: 0 })
   const [timer, setTimer] = useState(0)
   const [running, setRunning] = useState(false)
   const [moveCount, setMoveCount] = useState(0)
@@ -79,6 +81,7 @@ export default function Puzzle() {
   const autoTimerRef = useRef(null)
   const puzzleRef = useRef(null)
   const timerValRef = useRef(0) // Ref mirror of timer for useCallback deps
+  const solutionTimerRef = useRef([]) // Array of timeout IDs for playback
 
   // ─── Helpers ───
   const _applyMoveToBoard = (eng) => {
@@ -93,7 +96,12 @@ export default function Puzzle() {
     promotion: uci.length > 4 ? uci[4] : null,
   }), [])
 
-  const _isPlayerTurn = (idx) => idx % 2 === 0 // Even indices = player moves
+  const _isPlayerTurn = useCallback((idx) => {
+    // If player moves first (turn === pColor), player indices are even (0, 2, 4...)
+    // If opponent moves first (turn !== pColor), player indices are odd (1, 3, 5...)
+    const playerMovesFirst = turn === playerColor
+    return playerMovesFirst ? (idx % 2 === 0) : (idx % 2 === 1)
+  }, [turn, playerColor])
 
   // ─── Load next puzzle ───
   const loadNextPuzzle = useCallback(async (opts = {}) => {
@@ -168,7 +176,7 @@ export default function Puzzle() {
       setPlayerColor(pColor)
       setTurn(turn)
       setBrd(eng.getBoard())
-      setFlip(pColor === 'b' ? false : false)
+      setFlip(false)
       setLoading(false)
 
       if (turn === pColor) {
@@ -268,9 +276,13 @@ export default function Puzzle() {
       setResult('wrong')
       setShowWrongOverlay(true)
       setRunning(false)
-      // Auto-dismiss overlay after 3 seconds
+      // Auto-dismiss overlay after 2s and allow retry
       if (wrongOverlayTimerRef.current) clearTimeout(wrongOverlayTimerRef.current)
-      wrongOverlayTimerRef.current = setTimeout(() => { setShowWrongOverlay(false); wrongOverlayTimerRef.current = null }, 3000)
+      wrongOverlayTimerRef.current = setTimeout(() => {
+        setShowWrongOverlay(false)
+        setResult(null) // Allow trying different moves without full restart
+        wrongOverlayTimerRef.current = null
+      }, 2000)
       gen.current.recordResult(puzzleRef.current, false, timerValRef.current)
       setStats(gen.current.getStats())
       SFX.error()
@@ -300,9 +312,13 @@ export default function Puzzle() {
       setResult('wrong')
       setShowWrongOverlay(true)
       setRunning(false)
-      // Auto-dismiss overlay after 3 seconds
+      // Auto-dismiss overlay after 2s and allow retry
       if (wrongOverlayTimerRef.current) clearTimeout(wrongOverlayTimerRef.current)
-      wrongOverlayTimerRef.current = setTimeout(() => { setShowWrongOverlay(false); wrongOverlayTimerRef.current = null }, 3000)
+      wrongOverlayTimerRef.current = setTimeout(() => {
+        setShowWrongOverlay(false)
+        setResult(null) // Allow trying different moves without full restart
+        wrongOverlayTimerRef.current = null
+      }, 2000)
         gen.current.recordResult(puzzleRef.current, false, timerValRef.current)
         setStats(gen.current.getStats())
         SFX.error()
@@ -415,8 +431,99 @@ export default function Puzzle() {
     return () => { if (promoTimerRef.current) { clearTimeout(promoTimerRef.current); promoTimerRef.current = null } }
   }, [promo, changePromo])
 
-  // ─── Actions ───
-  const revealSolution = () => {
+  // ─── Play animated solution (step-by-step with sounds) ───
+  const stopSolution = useCallback(() => {
+    // Clear all pending timeouts
+    solutionTimerRef.current.forEach(id => clearTimeout(id))
+    solutionTimerRef.current = []
+    setSolutionPlaying(false)
+    setSolutionProgress({ current: 0, total: 0 })
+    setShowSolution(false)
+    setTimer(0)
+    timerValRef.current = 0
+    setMoveCount(0)
+    // Reset board to initial puzzle position so player can retry
+    if (puzzle) {
+      const eng = new ChessEngine()
+      eng.loadFEN(puzzle.fen)
+      engineRef.current = eng
+      setBrd(eng.getBoard())
+      setTurn(eng.getTurn())
+      setChk(eng.isInCheck() ? findKing(eng.getBoard(), eng.getTurn()) : [])
+      setLastM(null)
+      setSel(null)
+      setLegal([])
+      setRunning(true)
+    }
+  }, [puzzle])
+
+  const playAnimatedSolution = useCallback(() => {
+    if (!puzzle) return
+    // Stop any existing playback
+    stopSolution()
+
+    setResult(null)
+    setShowWrongOverlay(false)
+    setShowSolution(true)
+    setRunning(false)
+    setSolutionPlaying(true)
+
+    const eng = new ChessEngine()
+    eng.loadFEN(puzzle.fen)
+    engineRef.current = eng
+    setBrd(eng.getBoard())
+    setTurn(eng.getTurn())
+    setChk(eng.isInCheck() ? findKing(eng.getBoard(), eng.getTurn()) : [])
+    setLastM(null)
+
+    const sol = puzzle.moves
+    setSolutionProgress({ current: 0, total: sol.length })
+
+    const timeouts = []
+    let delay = 200 // Initial delay before first move
+    sol.forEach((uci, i) => {
+      delay += i === 0 ? 400 : 550
+      const m = _parseUci(uci)
+      const id = setTimeout(() => {
+        const r = eng.move(m.from, m.to, m.promotion)
+        if (r) {
+          _applyMoveToBoard(eng)
+          setLastM(r)
+          setSel(null)
+          setLegal([])
+          // Play sound
+          if (r.captured) SFX.capture()
+          else if (r.flags?.includes('k')) SFX.castle()
+          else if (m.promotion) SFX.promote()
+          else SFX.move()
+          if (eng.isInCheck()) setTimeout(() => SFX.check(), 80)
+          // Update progress
+          setSolutionProgress({ current: i + 1, total: sol.length })
+          // If last move, finish
+          if (i === sol.length - 1) {
+            setTimeout(() => {
+              SFX.promote()
+              setSolutionPlaying(false)
+            }, 400)
+          }
+        }
+      }, delay)
+      timeouts.push(id)
+    })
+
+    solutionTimerRef.current = timeouts
+  }, [puzzle, _parseUci, stopSolution, _applyMoveToBoard])
+
+  // Cleanup solution timers on unmount
+  useEffect(() => {
+    return () => {
+      solutionTimerRef.current.forEach(id => clearTimeout(id))
+    }
+  }, [])
+
+  // ─── Reveal solution (static, non-animated) ───
+  const revealSolution = useCallback(() => {
+    if (solutionPlaying) return
     setResult(null)
     setShowWrongOverlay(false)
     setShowSolution(true)
@@ -425,6 +532,10 @@ export default function Puzzle() {
     const eng = new ChessEngine()
     eng.loadFEN(puzzle.fen)
     engineRef.current = eng
+    setBrd(eng.getBoard())
+    setTurn(eng.getTurn())
+    setChk(eng.isInCheck() ? findKing(eng.getBoard(), eng.getTurn()) : [])
+    setLastM(null)
 
     let delay = 0
     puzzle.moves.forEach((uci, i) => {
@@ -438,7 +549,7 @@ export default function Puzzle() {
         }
       }, delay)
     })
-  }
+  }, [puzzle, _parseUci, solutionPlaying])
 
   const skipPuzzle = () => {
     gen.current.recordResult(puzzleRef.current, false, timer)
@@ -691,17 +802,35 @@ export default function Puzzle() {
 
         {/* ═══ CONTROLS ═══ */}
         <div className="pz-controls">
-          {!result && !showSolution && (
+          {solutionPlaying && (
+            <>
+              <div className="pz-sol-progress">
+                <div className="pz-sol-bar-track">
+                  <div className="pz-sol-bar-fill" style={{ width: `${(solutionProgress.current / solutionProgress.total) * 100}%` }} />
+                </div>
+                <span className="pz-sol-label">
+                  {solutionProgress.current}/{solutionProgress.total}
+                </span>
+              </div>
+              <button className="pz-btn pz-btn-stop" onClick={stopSolution} title="Detener">
+                ⏹ Detener
+              </button>
+            </>
+          )}
+          {!result && !showSolution && !solutionPlaying && (
             <>
               <button className="pz-btn pz-btn-hint" onClick={getHint} title="Pista">
                 💡 Pista
+              </button>
+              <button className="pz-btn pz-btn-play" onClick={playAnimatedSolution} title="Mostrar solución animada">
+                ▶ Solución animada
               </button>
               <button className="pz-btn pz-btn-skip" onClick={skipPuzzle} title="Saltar">
                 ⏭ Saltar
               </button>
             </>
           )}
-          {result === 'wrong' && (
+          {result === 'wrong' && !solutionPlaying && (
             <>
               <button className="pz-btn pz-btn-retry" onClick={() => {
                 // Reset puzzle to initial state for retry
@@ -732,12 +861,15 @@ export default function Puzzle() {
               <button className="pz-btn pz-btn-solution" onClick={revealSolution} title="Ver solución">
                 👁 Ver solución
               </button>
+              <button className="pz-btn pz-btn-play" onClick={playAnimatedSolution} title="Mostrar solución animada">
+                ▶ Animada
+              </button>
               <button className="pz-btn pz-btn-next" onClick={() => loadNextPuzzle()} title="Siguiente">
                 ⏭ Siguiente
               </button>
             </>
           )}
-          {showSolution && (
+          {showSolution && !solutionPlaying && (
             <button className="pz-btn pz-btn-next" onClick={() => loadNextPuzzle()} title="Siguiente">
               ⏭ Siguiente puzzle
             </button>

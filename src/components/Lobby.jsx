@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import PeerManager from '../utils/peerManager'
+import BoardPreview from './BoardPreview'
 import './Lobby.css'
 
 const getRouteParams = (location) => {
@@ -23,14 +24,31 @@ function Lobby() {
   const location = useLocation()
   const peerRef = useRef(null)
   const autoJoinAttemptedRef = useRef(false)
+
+  const isLocalMode = mode === 'vspc' || mode === 'solo'
+
+  // Redirect old pc-levels route to unified vs PC
+  useEffect(() => {
+    if (mode === 'pc-levels') navigate('/lobby/vspc', { replace: true })
+  }, [mode, navigate])
+
   const [view, setView] = useState('select')
   const [roomId, setRoomId] = useState('')
   const [joinInput, setJoinInput] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
   const [error, setError] = useState('')
-  const [, setPlayerColor] = useState(null)
+  const [playerColor, setPlayerColor] = useState(null)
+  const [colorPref, setColorPref] = useState('random') // 'w' | 'b' | 'random'
+  const [aiDifficulty, setAiDifficulty] = useState('medium') // 'easy' | 'medium' | 'hard'
 
   const isBlindMode = mode === 'blind'
+
+  const colorPrefLabel = { w: 'Blancas', b: 'Negras', random: 'Aleatorio' }
+  const colorPrefIcon = { w: '♔', b: '♚', random: '❓' }
+  const diffLabel = { easy: 'Fácil', medium: 'Medio', hard: 'Difícil' }
+
+  const resolveColor = (pref) =>
+    pref === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : pref
 
   const copyText = async (text, successMessage) => {
     try {
@@ -50,6 +68,8 @@ function Lobby() {
   }
 
   const handleCreateRoom = async () => {
+    const hostColor = resolveColor(colorPref)
+
     setView('creating')
     setStatusMessage('Iniciando conexión...')
     setError('')
@@ -61,19 +81,28 @@ function Lobby() {
       const id = await pm.createRoom()
       setRoomId(id)
       setView('created')
-      setPlayerColor('w')
+      setPlayerColor(hostColor)
 
       pm.onConnected(() => {
         setView('connected')
         setTimeout(() => {
           window.__coipoPeerManager = pm
-          window.__coipoRouteState = { playerColor: 'w', isHost: true, isBlindMode, roomId: id, peerManager: pm }
+          window.__coipoRouteState = { playerColor: hostColor, isHost: true, isBlindMode, roomId: id, peerManager: pm }
           window.location.hash = `#/game/${mode}`
         }, 800)
       })
 
       pm.onData((data) => {
-        if (data.type === 'JOIN') pm.send({ type: 'JOIN_ACK', color: 'b' })
+        if (data.type === 'JOIN') {
+          const joinerPref = data.prefColor || 'random'
+          let joinerColor
+          if (joinerPref === 'random' || joinerPref === hostColor) {
+            joinerColor = hostColor === 'w' ? 'b' : 'w'
+          } else {
+            joinerColor = joinerPref
+          }
+          pm.send({ type: 'JOIN_ACK', color: joinerColor })
+        }
       })
 
       pm.onError((err) => setError(`Error: ${err.message || 'Conexión fallida'}`))
@@ -98,19 +127,24 @@ function Lobby() {
     try {
       await pm.joinRoom(code)
       setView('connecting')
+      let colorAssigned = false
 
       pm.onConnected(() => {
-        pm.send({ type: 'JOIN' })
+        pm.send({ type: 'JOIN', prefColor: colorPref })
         setView('connected')
-        setTimeout(() => {
-          window.__coipoPeerManager = pm
-          window.__coipoRouteState = { playerColor: 'b', isHost: false, isBlindMode, roomId: code, peerManager: pm }
-          window.location.hash = `#/game/${mode}`
-        }, 800)
       })
 
       pm.onData((data) => {
-        if (data.type === 'JOIN_ACK') setPlayerColor(data.color || 'b')
+        if (data.type === 'JOIN_ACK' && !colorAssigned) {
+          colorAssigned = true
+          const assignedColor = data.color || 'b'
+          setPlayerColor(assignedColor)
+          setTimeout(() => {
+            window.__coipoPeerManager = pm
+            window.__coipoRouteState = { playerColor: assignedColor, isHost: false, isBlindMode, roomId: code, peerManager: pm }
+            window.location.hash = `#/game/${mode}`
+          }, 800)
+        }
       })
 
       pm.onError((err) => {
@@ -175,22 +209,93 @@ function Lobby() {
     setStatusMessage('')
   }
 
+  const modeIcon = { vspc: '🤖', solo: '🧠', pvp: '👥', blind: '🕶️' }
+  const modeTitle = { vspc: 'vs PC', solo: 'Vs Ti Mismo', pvp: 'Online', blind: 'A Ciegas' }
+  const modeDesc = {
+    vspc: 'Enfréntate a Stockfish. Elige color y dificultad.',
+    solo: 'Juega ambos bandos. Practica aperturas con tu color preferido.',
+    pvp: 'Conéctate directamente con otro jugador vía P2P',
+    blind: 'Oculta tus piezas al rival en este desafiante modo',
+  }
+
+  const handleStartLocal = () => {
+    const pc = resolveColor(colorPref)
+    navigate(`/game/${mode}`, { state: { playerColor: pc, aiDifficulty } })
+  }
+
   return (
     <div className="lobby">
       <div className="lobby-header">
         <h2 className="lobby-title">
-          {isBlindMode ? '🕶️' : '👥'} {isBlindMode ? 'Modo A Ciegas' : 'Modo Online'}
+          {modeIcon[mode] || '👥'} {modeTitle[mode] || 'Modo de Juego'}
         </h2>
         <p className="lobby-subtitle">
-          {isBlindMode
-            ? 'Oculta tus piezas al rival en este desafiante modo'
-            : 'Conéctate directamente con otro jugador vía P2P'}
+          {modeDesc[mode] || ''}
         </p>
       </div>
 
-      <div className="lobby-card">
-        {view === 'select' && (
+      <div className="lobby-card">          {view === 'select' && isLocalMode && (
           <div className="lobby-options">
+            <div className="lobby-color">
+              <span className="lobby-color-lb">Tus piezas:</span>
+              <div className="lobby-color-opts">
+                {['w', 'random', 'b'].map(c => (
+                  <button
+                    key={c}
+                    className={`lobby-color-btn ${colorPref === c ? 'lobby-color-btn--on' : ''}`}
+                    onClick={() => setColorPref(c)}
+                  >
+                    <span className="lobby-color-icon">{colorPrefIcon[c]}</span>
+                    <span>{colorPrefLabel[c]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {mode === 'vspc' && (
+              <div className="lobby-color">
+                <span className="lobby-color-lb">Dificultad IA:</span>
+                <div className="lobby-color-opts">
+                  {['easy', 'medium', 'hard'].map(d => (
+                    <button
+                      key={d}
+                      className={`lobby-color-btn ${aiDifficulty === d ? 'lobby-color-btn--on' : ''}`}
+                      onClick={() => setAiDifficulty(d)}
+                    >
+                      <span className="lobby-color-icon">{d === 'easy' ? '🌱' : d === 'medium' ? '🔥' : '💀'}</span>
+                      <span>{diffLabel[d]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button className="lobby-btn lobby-btn-start" onClick={handleStartLocal}>
+              <span className="lobby-btn-icon">{mode === 'solo' ? '🧠' : '♟'}</span>
+              <span className="lobby-btn-label">Comenzar partida</span>
+              <span className="lobby-btn-desc">{mode === 'solo' ? 'Juega ambos bandos' : `Stockfish ${diffLabel[aiDifficulty]}`}</span>
+            </button>
+          </div>
+        )}
+
+        {view === 'select' && !isLocalMode && (
+          <div className="lobby-options">
+            <div className="lobby-color">
+              <span className="lobby-color-lb">Tus piezas:</span>
+              <div className="lobby-color-opts">
+                {['w', 'random', 'b'].map(c => (
+                  <button
+                    key={c}
+                    className={`lobby-color-btn ${colorPref === c ? 'lobby-color-btn--on' : ''}`}
+                    onClick={() => setColorPref(c)}
+                  >
+                    <span className="lobby-color-icon">{colorPrefIcon[c]}</span>
+                    <span>{colorPrefLabel[c]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <button className="lobby-btn lobby-btn-create" onClick={handleCreateRoom}>
               <span className="lobby-btn-icon">🏠</span>
               <span className="lobby-btn-label">Crear Sala</span>
@@ -234,6 +339,15 @@ function Lobby() {
 
         {view === 'created' && (
           <div className="lobby-room">
+            {playerColor && (
+              <>
+                <BoardPreview playerColor={playerColor} />
+                <div className="lobby-loading-color">
+                  <span className="llc-icon">{playerColor === 'w' ? '♔' : '♚'}</span>
+                  <span className="llc-label">{playerColor === 'w' ? 'Blancas' : 'Negras'}</span>
+                </div>
+              </>
+            )}
             <div className="room-id-box" onClick={handleCopyRoomId}>
               <span className="room-label">Código de sala</span>
               <div className="room-id">{roomId}</div>
@@ -269,6 +383,15 @@ function Lobby() {
 
         {view === 'connecting' && (
           <div className="lobby-status">
+            {playerColor && (
+              <>
+                <BoardPreview playerColor={playerColor} />
+                <div className="lobby-loading-color">
+                  <span className="llc-icon">{playerColor === 'w' ? '♔' : '♚'}</span>
+                  <span className="llc-label">{playerColor === 'w' ? 'Blancas' : 'Negras'}</span>
+                </div>
+              </>
+            )}
             <div className="lobby-spinner" />
             <p>Estableciendo conexión P2P...</p>
             <p className="lobby-status-sub">Esto puede tomar unos segundos</p>
@@ -278,6 +401,15 @@ function Lobby() {
         {view === 'connected' && (
           <div className="lobby-status">
             <div className="connected-check">✓</div>
+            {playerColor && (
+              <>
+                <BoardPreview playerColor={playerColor} />
+                <div className="lobby-loading-color">
+                  <span className="llc-icon">{playerColor === 'w' ? '♔' : '♚'}</span>
+                  <span className="llc-label">{playerColor === 'w' ? 'Blancas' : 'Negras'}</span>
+                </div>
+              </>
+            )}
             <p>¡Conexión establecida!</p>
             <p className="lobby-status-sub">Iniciando partida...</p>
           </div>

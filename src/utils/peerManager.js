@@ -18,6 +18,15 @@ class PeerManager {
     this.onConnectedCallbacks = [];
     this.onDisconnectedCallbacks = [];
     this.onErrorCallbacks = [];
+    this._heartbeatInterval = null;
+    this._lastPongTime = Date.now();
+    this._heartbeatTimedOut = false;
+    this._hostId = null; // store host/remote PeerID for auto-reconnect
+    this._guestId = null; // for host: store guest's PeerID for auto-reconnect
+  }
+
+  isConnected() {
+    return this.connected && this.connection?.open === true
   }
 
   normalizeId(id) {
@@ -96,6 +105,7 @@ class PeerManager {
           const normalizedId = this.normalizeId(id);
           this.myId = normalizedId;
           this.opening = false;
+          this._startHeartbeat();
           settle(resolve, normalizedId);
         });
 
@@ -118,6 +128,7 @@ class PeerManager {
   joinRoom(hostId) {
     const resolvedHostId = this.resolveRoomCode(hostId);
     const hostIdCandidates = this.buildPeerIdCandidates(resolvedHostId);
+    this._hostId = resolvedHostId; // store for auto-reconnect
 
     return new Promise((resolve, reject) => {
       this.isHost = false;
@@ -239,30 +250,61 @@ class PeerManager {
     this.connection = conn;
     this.connected = Boolean(conn?.open);
 
+    // Store remote peer ID for reconnection
+    if (this.isHost && conn.peer) {
+      this._guestId = conn.peer
+    }
+
     conn.on('open', () => {
       this.connected = true;
+      this._lastPongTime = Date.now();
+      this._heartbeatTimedOut = false;
+      // On open, also store the remote peer's ID
+      if (this.isHost && conn.peer) {
+        this._guestId = conn.peer
+      }
+      this._startHeartbeat();
       this._triggerConnected();
     });
 
     if (conn.open) {
       this.connected = true;
+      this._lastPongTime = Date.now();
+      this._heartbeatTimedOut = false;
+      this._startHeartbeat();
       this._triggerConnected();
     }
 
     conn.on('data', (data) => {
+      // Handle PONG response internally
+      if (data?.type === 'PONG') {
+        this._lastPongTime = Date.now()
+        this._heartbeatTimedOut = false
+        return
+      }
+      // Handle PING from remote — respond with PONG
+      if (data?.type === 'PING') {
+        this.send({ type: 'PONG', timestamp: Date.now() })
+        return
+      }
+      // Forward all other data to callbacks
       this._triggerData(data);
     });
 
     conn.on('close', () => {
+      this._stopHeartbeat();
       if (this.connection === conn) {
         this.connection = null;
       }
       this.connected = false;
       this._triggerDisconnected();
+      // Auto-reconnect for both host and guest
+      this._attemptReconnect()
     });
 
     conn.on('error', (err) => {
       console.error('Connection error:', err);
+      this._stopHeartbeat();
       if (this.connection === conn) {
         this.connection = null;
       }
@@ -411,10 +453,87 @@ class PeerManager {
     this.onErrorCallbacks.push(callback);
   }
 
+  // ─── Heartbeat ───
+
+  _startHeartbeat() {
+    this._stopHeartbeat()
+    this._lastPongTime = Date.now()
+    this._heartbeatTimedOut = false
+
+    this._heartbeatInterval = setInterval(() => {
+      if (!this.isConnected()) {
+        this._stopHeartbeat()
+        return
+      }
+
+      // Send PING
+      this.send({ type: 'PING', timestamp: Date.now() })
+
+      // Check if we missed too many PONGs (5 second timeout)
+      const elapsed = Date.now() - this._lastPongTime
+      if (elapsed > 5000 && !this._heartbeatTimedOut) {
+        this._heartbeatTimedOut = true
+        console.warn('[Heartbeat] No PONG received for 5s — connection may be lost')
+        this._triggerDisconnected()
+
+        // Auto-reconnect for both host and guest
+        this._attemptReconnect()
+      }
+    }, 3000)
+  }
+
+  _stopHeartbeat() {
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval)
+      this._heartbeatInterval = null
+    }
+  }
+
+  // ─── Auto-reconnect (works for both host and guest) ───
+
+  _attemptReconnect(retries = 3) {
+    // Determine the remote peer ID to reconnect to
+    const remoteId = this.isHost ? this._guestId : this._hostId
+    if (!remoteId || retries <= 0) return
+
+    console.log('[Heartbeat] Attempting reconnect to', remoteId, '(retries left:', retries, ')')
+
+    // Clean up old connection
+    try {
+      if (this.connection) this.connection.close()
+    } catch (e) {}
+
+    try {
+      const conn = this.peer.connect(remoteId, {
+        reliable: true,
+        serialization: 'json',
+      })
+
+      this._handleConnection(conn)
+
+      const retryTimeout = setTimeout(() => {
+        if (!conn.open) {
+          conn.close()
+          setTimeout(() => this._attemptReconnect(retries - 1), 2000)
+        }
+      }, 3000)
+
+      conn.on('open', () => {
+        clearTimeout(retryTimeout)
+        console.log('[Heartbeat] Reconnected successfully!')
+        this._triggerConnected()
+      })
+    } catch (e) {
+      console.warn('[Heartbeat] Reconnect failed:', e)
+      setTimeout(() => this._attemptReconnect(retries - 1), 2000)
+    }
+  }
+
   /**
    * Cierra la conexión y libera recursos
    */
   disconnect() {
+    this._stopHeartbeat()
     try {
       if (this.connection) {
         this.connection.close();
@@ -431,6 +550,8 @@ class PeerManager {
     this.myId = null;
     this.connection = null;
     this.peer = null;
+    this._hostId = null;
+    this._guestId = null;
   }
 }
 

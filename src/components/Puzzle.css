@@ -433,6 +433,55 @@
   border-color: rgba(156, 39, 176, 0.3);
 }
 .pz-btn-solution:hover { background: rgba(156, 39, 176, 0.2); }
+.pz-btn-play {
+  background: rgba(0, 200, 150, 0.1);
+  color: #5EEAD4;
+  border-color: rgba(0, 200, 150, 0.3);
+}
+.pz-btn-play:hover { background: rgba(0, 200, 150, 0.2); }
+.pz-btn-stop {
+  background: rgba(244, 67, 54, 0.15);
+  color: #EF9A9A;
+  border-color: rgba(244, 67, 54, 0.3);
+  animation: stopPulse 1.2s ease-in-out infinite;
+}
+.pz-btn-stop:hover { background: rgba(244, 67, 54, 0.25); }
+
+/* ═══ SOLUTION PROGRESS ═══ */
+.pz-sol-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 2;
+  padding: 0 4px;
+}
+.pz-sol-bar-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.pz-sol-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00C896, #5EEAD4);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 8px rgba(0, 200, 150, 0.4);
+}
+.pz-sol-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  text-align: center;
+}
+
+@keyframes stopPulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(244, 67, 54, 0); }
+  50% { box-shadow: 0 0 12px rgba(244, 67, 54, 0.25); }
+}
 .pz-btn-next {
   background: var(--btn-primary-bg);
   color: #fff;

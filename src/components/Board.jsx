@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react'
 import { ChessPiece } from './ChessPieces'
+import * as SFX from '../utils/sounds'
 import './Board.css'
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
@@ -17,6 +18,10 @@ function Board({
   isSelectable = true,
   isCheckmate = false,
   boardTheme = 'classic',
+  premove = null,
+  premoveSrc = null,
+  hintMove = null,
+  capturableSq = [],
 }) {
   const boardRef = useRef(null)
   const [drag, setDrag] = useState(null)
@@ -26,17 +31,42 @@ function Board({
   const [captureFlashSq, setCaptureFlashSq] = useState(null)
   const [landAnimSq, setLandAnimSq] = useState(null)
   const [entryDone, setEntryDone] = useState(false)
+  const [victorySparkles, setVictorySparkles] = useState([])
   const prevLastMove = useRef(null)
   const captureTimerRef = useRef(null)
   const shakeTimerRef = useRef(null)
   const flashTimerRef = useRef(null)
   const landTimerRef = useRef(null)
+  const lastHoveredSqRef = useRef(null) // Throttle: only play hover sound on new piece
 
-  // Board entry animation — mark pieces as entered after a short delay
+  // Board entry animation
   useEffect(() => {
     const t = setTimeout(() => setEntryDone(true), 1200)
     return () => clearTimeout(t)
   }, [])
+
+  // Victory sparkles on checkmate
+  useEffect(() => {
+    if (!isCheckmate) return
+    const colors = ['#FFD700', '#FF6B6B', '#4FC3F7', '#81C784', '#FFB74D', '#CE93D8']
+    const sparks = []
+    for (let i = 0; i < 24; i++) {
+      const angle = (i / 24) * Math.PI * 2 + (Math.random() - 0.5) * 0.5
+      const dist = 40 + Math.random() * 80
+      sparks.push({
+        x: `${50 + (Math.random() - 0.5) * 60}%`,
+        y: `${50 + (Math.random() - 0.5) * 60}%`,
+        dx: Math.cos(angle) * dist,
+        dy: Math.sin(angle) * dist,
+        size: 5 + Math.random() * 8,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        delay: Math.random() * 0.3,
+      })
+    }
+    setVictorySparkles(sparks)
+    const t = setTimeout(() => setVictorySparkles([]), 1500)
+    return () => clearTimeout(t)
+  }, [isCheckmate])
 
   const isWhite = !flipped
 
@@ -76,6 +106,8 @@ function Board({
     })
     if (!p) return
 
+    if (isSelectable) SFX.pickup()
+
     setDrag({
       square,
       piece: p,
@@ -98,6 +130,7 @@ function Board({
       const sq = sqFromPos(e.clientX, e.clientY)
       if (sq && sq !== drag.square) {
         onPieceDrop?.(drag.square, sq)
+        SFX.drop()
       } else {
         onSquareClick?.(drag.square)
       }
@@ -122,6 +155,7 @@ function Board({
       return toSq(r, c) === square
     })
     if (!p) return
+    if (isSelectable) SFX.pickup()
     setDrag({
       square,
       piece: p,
@@ -147,6 +181,7 @@ function Board({
       const sq = sqFromPos(touch.clientX, touch.clientY)
       if (sq && sq !== drag.square) {
         onPieceDrop?.(drag.square, sq)
+        SFX.drop()
       } else {
         onSquareClick?.(drag.square)
       }
@@ -250,12 +285,12 @@ function Board({
     animTimerRef.current = setTimeout(() => {
       if (mainEl) mainEl.style.transition = ''
       animTimerRef.current = null
-    }, 250)
+    }, 280)
     if (rookEl) {
       animTimerRef2.current = setTimeout(() => {
         rookEl.style.transition = ''
         animTimerRef2.current = null
-      }, 250)
+      }, 280)
     }
 
     // Cleanup on unmount or next move
@@ -274,9 +309,49 @@ function Board({
   const sqLast = (sq) => lastMove && (lastMove.from === sq || lastMove.to === sq)
   const sqCheck = (sq) => checkSq.includes(sq)
   const sqHover = (sq) => hoverSq === sq && hoverSq !== selected
+  const sqPremove = (sq) => premove && (premove.from === sq || premove.to === sq)
+  const sqPremoveSrc = (sq) => premoveSrc === sq
+  const sqHint = (sq) => hintMove && (hintMove.from === sq || hintMove.to === sq)
+  const sqCapturable = (sq) => capturableSq.includes(sq)
+  const isAnyCheck = checkSq.length > 0
 
-  const rows = isWhite ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0]
-  const cols = isWhite ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0]
+  // ─── Last move arrow — compute pixel positions ───
+  const [lastArrow, setLastArrow] = useState(null)
+  const prevArrowRef = useRef(null)
+
+  useLayoutEffect(() => {
+    if (!lastMove || !boardRef.current) {
+      setLastArrow(null)
+      prevArrowRef.current = lastMove
+      return
+    }
+    if (prevArrowRef.current === lastMove) return
+    prevArrowRef.current = lastMove
+
+    const fromEl = boardRef.current.querySelector(`[data-sq="${lastMove.from}"]`)
+    const toEl = boardRef.current.querySelector(`[data-sq="${lastMove.to}"]`)
+    if (!fromEl || !toEl) return
+
+    const boardRect = boardRef.current.getBoundingClientRect()
+    const fromRect = fromEl.getBoundingClientRect()
+    const toRect = toEl.getBoundingClientRect()
+
+    const bw = parseFloat(getComputedStyle(boardRef.current).borderWidth) || 0
+    const sqSize = fromRect.width
+
+    const x1 = fromRect.left - boardRect.left - bw + sqSize / 2
+    const y1 = fromRect.top - boardRect.top - bw + sqSize / 2
+    const x2 = toRect.left - boardRect.left - bw + sqSize / 2
+    const y2 = toRect.top - boardRect.top - bw + sqSize / 2
+
+    setLastArrow({ x1, y1, x2, y2 })
+  }, [lastMove])
+
+
+  // Siempre iterar de arriba a abajo e izquierda a derecha visualmente.
+  // getCoords/pieceAt ya manejan la rotación a través de isWhite.
+  const rows = [0, 1, 2, 3, 4, 5, 6, 7]
+  const cols = [0, 1, 2, 3, 4, 5, 6, 7]
 
   return (
     <div className={`board ${flipped ? 'flipped' : ''} ${boardShake ? 'board-shake' : ''}`} ref={boardRef} data-theme={boardTheme}>
@@ -299,6 +374,7 @@ function Board({
               const isCaptureFlash = captureFlashSq === sq
               // Checkmate defeat: animate the losing king
               const isCheckmateKing = isCheckmate && p?.type === 'k' && checkSq.includes(sq)
+              const isCheckRipple = isAnyCheck && sqCheck(sq) && p?.type === 'k'
 
               return (
                 <div
@@ -309,6 +385,13 @@ function Board({
                     sqSelected(sq) ? 'ssel' : '',
                     (sqLast(sq) && !sqSelected(sq)) ? 'slast' : '',
                     sqCheck(sq) ? 'schk' : '',
+                    isCheckRipple ? 'check-ripple' : '',
+                    sqCheck(sq) ? 'schk' : '',
+                    isCheckRipple ? 'check-ripple' : '',
+                    sqPremove(sq) ? 'sprem' : '',
+                    sqPremoveSrc(sq) ? 'sprem-src' : '',
+                    sqHint(sq) ? 'shint' : '',
+                    sqCapturable(sq) ? 'scap' : '',
                     isDragSq ? 'sdrag' : '',
                     isHover ? 'shover' : '',
                     isCaptureFlash ? 'sq-capture-flash' : '',
@@ -317,9 +400,20 @@ function Board({
                   onMouseDown={(e) => handleMouseDown(e, sq)}
                   onTouchStart={(e) => handleTouchStart(e, sq)}
                   onClick={() => handleClick(sq)}
-                >
-                  {p && !isDragSq && (
-                    <span className={`pce ${p.color === 'w' ? 'pw' : 'pb'} ${p._hidden ? 'phid' : ''} ${!entryDone ? 'pce-entry' : ''} ${isLanding ? 'pce-land' : ''} ${isCheckmateKing ? 'pce-checkmate-defeat' : ''}`} style={!entryDone ? { animationDelay: `${entryDelay}ms` } : undefined}>
+                >                    {p && !isDragSq && (
+                    <span
+                      className={`pce ${p.color === 'w' ? 'pw' : 'pb'} ${p._hidden ? 'phid' : ''} ${!entryDone ? 'pce-entry' : ''} ${isLanding ? 'pce-land' : ''} ${isCheckmateKing ? 'pce-checkmate-defeat' : ''} ${sqCheck(sq) ? 'pce-check-pulse' : ''}`}
+                      style={!entryDone ? { animationDelay: `${entryDelay}ms` } : undefined}
+                      onMouseEnter={() => {
+                        if (lastHoveredSqRef.current !== sq) {
+                          lastHoveredSqRef.current = sq
+                          SFX.hover()
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        if (lastHoveredSqRef.current === sq) lastHoveredSqRef.current = null
+                      }}
+                    >
                       {p._hidden
                         ? <ChessPiece color={p.color} type="p" />
                         : <ChessPiece color={p.color} type={p.type} />
@@ -329,6 +423,11 @@ function Board({
 
                   {isLegal && (
                     <span className={`lm ${p ? 'lmc' : 'lmd'}`} />
+                  )}
+
+                  {/* Premove indicator — blue dot on destination */}
+                  {premove && premove.to === sq && (
+                    <span className="lm lmp" />
                   )}
 
                   {/* Coordenadas estilo Lichess — usando índices visuales */}
@@ -361,6 +460,43 @@ function Board({
           </div>
         )
       })()}
+
+      {/* Last move arrow overlay */}
+      {lastArrow && (
+        <svg className="last-arrow" width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 5 }}>
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="rgba(255,215,0,0.6)" />
+            </marker>
+          </defs>
+          <line
+            x1={lastArrow.x1} y1={lastArrow.y1}
+            x2={lastArrow.x2} y2={lastArrow.y2}
+            stroke="rgba(255,215,0,0.5)"
+            strokeWidth={Math.max(4, Math.min(10, (lastArrow.x2 - lastArrow.x1) * 0.06))}
+            strokeLinecap="round"
+            markerEnd="url(#arrowhead)"
+            className="la-line"
+          />
+        </svg>
+      )}
+
+      {/* Victory sparkles */}
+      {isCheckmate && victorySparkles.map((s, i) => (
+        <div
+          key={i}
+          className="victory-spark"
+          style={{
+            left: s.x,
+            top: s.y,
+            '--spark-x': `${s.dx}px`,
+            '--spark-y': `${s.dy}px`,
+            '--spark-size': `${s.size}px`,
+            '--spark-color': s.color,
+            animationDelay: `${s.delay}s`,
+          }}
+        />
+      ))}
 
       {/* Floating piece during drag — centered on cursor */}
       {drag && (

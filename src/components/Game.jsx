@@ -9,7 +9,7 @@ import { ChessPiece } from './ChessPieces'
 import ChessClock from './ChessClock'
 import EvalGraph from './EvalGraph'
 import * as SFX from '../utils/sounds'
-import { toggleMute } from '../utils/sounds'
+import { toggleMute, setVolume as setSFXVolume, setProfile as setSFXProfile } from '../utils/sounds'
 import { getCustomizationConfig, BOARD_THEMES, AMBIENT_THEMES, SOUND_PROFILES, saveCustomizationConfig } from '../utils/customization'
 import './Game.css'
 
@@ -66,6 +66,7 @@ export default function Game() {
   const [promo, setPromo] = useState(null) // { from, to }
   const [aiSt, setAiSt] = useState('…')
   const [muted, setMuted] = useState(false)
+  const [volume, setVolume] = useState(1.0)
   const changeBoardTheme = (id) => { setBoardTheme(id); localStorage.setItem('coipo-board-theme', id); setShowThemeSelect(false) }
   const [clockTime, setClockTime] = useState(300) // 5 minutes default
   const [clockIncrement, setClockIncrement] = useState(0)
@@ -79,11 +80,35 @@ export default function Game() {
   const chatRef = useRef(null)
   const [matPulse, setMatPulse] = useState(false)
   const [evalHistory, setEvalHistory] = useState([])
+  const [showDrawOffer, setShowDrawOffer] = useState(false)
+  const [pendingDrawFn, setPendingDrawFn] = useState(null)
+  const [premove, setPremove] = useState(null) // { from, to }
+  const [premoveSrc, setPremoveSrc] = useState(null) // source square during premove selection
+  const [onlineStatus, setOnlineStatus] = useState('connected') // 'connected' | 'reconnecting' | 'lost'
+  const [hintMove, setHintMove] = useState(null) // { from, to } - suggested move from AI
+  const [capturableSq, setCapturableSq] = useState([]) // squares with capturable opponent pieces
+
+  // ─── Move navigation ───
+  const fenHistoryRef = useRef([]) // FENs after each move (index 0 = after move 1)
+  const [viewingMove, setViewingMove] = useState(-1) // -1 = current position, 0..n = move index
+  const savedBoardRef = useRef(null) // snapshot of brd when viewing history
+  const savedTurnRef = useRef(null)
+
+  // ─── Hint timeout ref ───
+  const hintTimerRef = useRef(null)
+  // Cleanup hint timer on unmount
+  useEffect(() => {
+    return () => {
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
+    }
+  }, [])
+
   const prevAdvRef = useRef(0)
   const matPulseTimerRef = useRef(null)
 
   useEffect(() => {
-    const handleEsc = (e) => {
+    const handleKeys = (e) => {
+      // Escape always works
       if (e.key === 'Escape') {
         if (showGO) setShowGO(false)
         else if (showThemeSelect) setShowThemeSelect(false)
@@ -91,11 +116,58 @@ export default function Game() {
         else if (showDiff) setShowDiff(false)
         else if (showCustomSelect) setShowCustomSelect(false)
         else if (chatOpen) setChatOpen(false)
+        else if (premove || premoveSrc) { setPremove(null); setPremoveSrc(null) }
+        else if (hintMove) { setHintMove(null) }
+        return
+      }
+
+      // ─── Keyboard shortcuts ───
+      const isCtrl = e.ctrlKey || e.metaKey
+
+      // Ctrl+Z: undo (local modes)
+      if (isCtrl && e.key === 'z') {
+        e.preventDefault()
+        if (local) undo()
+        return
+      }
+
+      // H/h: hint (vsPC mode)
+      if ((e.key === 'h' || e.key === 'H') && !isCtrl && vsPC) {
+        e.preventDefault()
+        if (hintMove) { setHintMove(null); return }
+        if (!aiThk) getHint()
+        return
+      }
+
+      // R/r: resign
+      if ((e.key === 'r' || e.key === 'R') && !isCtrl && status === 'PLAYING') {
+        e.preventDefault()
+        resign()
+        return
+      }
+
+      // N/n: new game (when game over)
+      if ((e.key === 'n' || e.key === 'N') && !isCtrl && showGO) {
+        e.preventDefault()
+        newGame()
+        return
+      }
+
+      // ←/→: navigate moves
+      if (e.key === 'ArrowLeft' && hist.length > 0) {
+        e.preventDefault()
+        navigateToMove(viewingMove - 1)
+        return
+      }
+      if (e.key === 'ArrowRight' && hist.length > 0) {
+        e.preventDefault()
+        navigateToMove(viewingMove + 1)
+        return
       }
     }
-    window.addEventListener('keydown', handleEsc)
-    return () => window.removeEventListener('keydown', handleEsc)
-  }, [showGO, showThemeSelect, showClockSelect, showDiff, showCustomSelect, chatOpen])
+    window.addEventListener('keydown', handleKeys)
+    return () => window.removeEventListener('keydown', handleKeys)
+  }, [showGO, showThemeSelect, showClockSelect, showDiff, showCustomSelect, chatOpen, premove, premoveSrc, hintMove, vsPC, aiThk, local, status, hist.length, viewingMove])
 
   const routeState = loc.state || window.__coipoRouteState || {}
   const isHost = routeState.isHost ?? true
@@ -106,38 +178,65 @@ export default function Game() {
   const blind = mode === 'blind'
   const online = mode === 'pvp' || mode === 'blind'
   const local = vsPC || solo
+  const premoveEnabled = online || vsPC
+  const isViewingHistory = viewingMove >= 0 && viewingMove < hist.length
 
   // Init
   useEffect(() => {
     const st = routeState || {}
     const pc = st.playerColor || 'w'
+    const stDiff = st.aiDifficulty || 'medium'
+    if (aiDiff !== stDiff) setAiDiff(stDiff)
     if (online) {
       const p = st.peerManager || window.__coipoPeerManager
       if (!p) { nav('/'); return }
       pm.current = p; setPColor(pc); setMyTurn(pc === 'w')
-      p.onData(d => peerData(d))
+      p.onData(d => peerDataRef.current?.(d))
       p.onDisconnected(() => {
-        setGoText('Se perdió la conexión con el rival')
-        setShowGO(true)
-        SFX.gameOver()
+        setOnlineStatus('reconnecting')
+        setGoText('Conexión perdida — reconectando...')
+        // If reconnection fails after timeout, show game over
+        const reconnectTimeout = setTimeout(() => {
+          if (!p.isConnected()) {
+            setOnlineStatus('lost')
+            setGoText('Se perdió la conexión con el rival')
+            setShowGO(true)
+            SFX.gameOver()
+          }
+        }, 10000)
+        // Clear timeout if they reconnect before it fires
+        const cleanup = () => {
+          clearTimeout(reconnectTimeout)
+          setOnlineStatus('connected')
+          setGoText('')
+        }
+        p.onConnected(cleanup)
       })
+      setOnlineStatus('connected')
     } else {
       // Clean stale P2P state for local/AI modes
       try {
         delete window.__coipoRouteState
         delete window.__coipoPeerManager
       } catch(e) {}
-      if (vsPC && mode === 'pc-levels') setShowDiff(true)
     }
-    if (vsPC) { const a = new AIPlayer(aiDiff); ai.current = a; a.init().then(()=>setAiSt('SF')).catch(()=>setAiSt('local')) }
+    if (vsPC) { const a = new AIPlayer(stDiff || 'medium'); ai.current = a; a.init().then(()=>setAiSt('SF')).catch(()=>setAiSt('local')) }
     // Cargar configuración de personalización modular
     const customConfig = getCustomizationConfig()
     setBoardTheme(customConfig.boardTheme || 'classic')
     setSoundProfile(customConfig.soundProfile || 'wood')
     setAmbientTheme(customConfig.ambientTheme || 'none')
+    setSoundProfile(customConfig.soundProfile || 'wood')
+    setVolume(customConfig.volume ?? 1.0)
+    setSFXVolume(customConfig.volume ?? 1.0)
+    setSFXProfile(customConfig.soundProfile || 'wood')
 
     engine.reset(); refresh(pc)
-    setFlip(pc === 'b' ? false : false)
+    setFlip(false)
+    fenHistoryRef.current = []
+    setViewingMove(-1)
+    setHintMove(null)
+    setCapturableSq([])
     console.log('[Game] Init mode:', mode, 'vsPC:', vsPC, 'pc:', pc, 'board:', engine.getBoard().length)
     setMoveTimes([])
     moveStartRef.current = Date.now()
@@ -154,12 +253,38 @@ export default function Game() {
     }
   }, [])
 
-  // IA trigger
+  // IA trigger — stable deps via ref
+  const makeAIRef = useRef(null)
   useEffect(() => {
     if (vsPC && !myTurn && (status === 'PLAYING' || status === 'CHECK') && !aiThk && !promo) {
-      const t = setTimeout(() => makeAI(), 200); return () => clearTimeout(t)
+      const t = setTimeout(() => makeAIRef.current?.(), 200); return () => clearTimeout(t)
     }
-  }, [myTurn, status, aiThk, promo])
+  }, [myTurn, status, aiThk, promo, vsPC])
+
+  // Premove execution — when myTurn becomes true, execute stored premove
+  useEffect(() => {
+    if (!myTurn || !premove || promo) return
+    if ((status !== 'PLAYING' && status !== 'CHECK') || aiThk) return
+
+    const { from, to } = premove
+    setPremove(null)
+    setPremoveSrc(null)
+
+    // Verify the move is still legal
+    const legalMoves = engine.getLegalMoves(from)
+    if (legalMoves.some(m => m.to === to)) {
+      // Execute the premove
+      const p = engine.getPiece(from)
+      if (p?.type === 'p' && ((p.color==='w'&&to[1]==='8')||(p.color==='b'&&to[1]==='1'))) {
+        // Pawn promotion — auto queen
+        const r = engine.move(from, to, 'q')
+        if (r) { SFX.promote(); afterMove(r) }
+      } else {
+        const r = engine.move(from, to)
+        if (r) afterMove(r)
+      }
+    }
+  }, [myTurn])
 
   // Auto-promo
   useEffect(() => {
@@ -200,36 +325,55 @@ export default function Game() {
     }
   }, [flip, pColor, blind, engine])
 
-  // Verificación y restablecimiento de conexión online (P2P)
+  // Aplicar tema ambiente al body
+  useEffect(() => {
+    const theme = AMBIENT_THEMES.find(a => a.id === ambientTheme)
+    if (theme) {
+      document.body.style.background = theme.color
+      document.body.style.backgroundImage = theme.bgImage
+      document.body.style.backgroundAttachment = 'fixed'
+    }
+    return () => {
+      document.body.style.background = ''
+      document.body.style.backgroundImage = ''
+    }
+  }, [ambientTheme])
+
+  // Sincronizar perfil de sonido con SFX module
+  useEffect(() => {
+    setSFXProfile(soundProfile)
+  }, [soundProfile])
+
+  // Monitoreo de conexión P2P usando el heartbeat de peerManager
+  const peerDataRef = useRef(null)
   useEffect(() => {
     if (!online) return
     const interval = setInterval(() => {
       try {
-        if (!pm.current || !(pm.current.isConnected?.() ?? true)) {
+        if (!pm.current) return
+        if (!pm.current.isConnected()) {
+          setOnlineStatus('reconnecting')
+          // Try to recover from __coipoRouteState
           const stRecovered = loc.state || window.__coipoRouteState || {}
           const p = pm.current || stRecovered.peerManager || window.__coipoPeerManager
           if (p && p !== pm.current) {
             pm.current = p
-            p.onData(d => peerData(d))
-            p.onDisconnected(() => {
-              setGoText('Se perdió la conexión con el rival — reintentando...')
-              setTimeout(() => setGoText('Se perdió la conexión con el rival'), 5000)
-            })
-          } else if (!p) {
-            setGoText('Conexión perdida — redirigiendo...')
-            setTimeout(() => nav('/'), 3000)
+            const cb = peerDataRef.current
+            p.onData(d => cb(d))
           }
+        } else {
+          setOnlineStatus(prev => prev === 'reconnecting' ? 'connected' : prev)
         }
       } catch (e) {
         console.warn('Error al verificar conexión P2P:', e)
       }
     }, 4000)
     return () => clearInterval(interval)
-  }, [online, peerData, nav, loc])
+  }, [online, nav, loc])
 
   const gameOver = useCallback((st) => {
     let r = ''; const w = engine.getTurn()==='w'?'Negras':'Blancas'
-    if (st==='CHECKMATE') { r=`Jaque mate. ${w} ganan.`; SFX.checkmate(); setTimeout(()=>SFX.gameOver(), 400) }
+    if (st==='CHECKMATE') { r=`Jaque mate. ${w} ganan.`; SFX.checkmate(); setTimeout(()=>SFX.victory(), 600); setTimeout(()=>SFX.gameOver(), 400) }
     else if (st==='STALEMATE') { r='Ahogado. Tablas.'; SFX.gameOver() }
     else if (st==='DRAW') { r='Tablas.'; SFX.gameOver() }
     else return
@@ -255,7 +399,15 @@ export default function Game() {
     switch (d.type) {
       case 'MOVE': if(d.data){const r=engine.move(d.data.from,d.data.to,d.data.promotion);if(r){if(r.captured)playCaptureSound(r.captured);else if(r.flags?.includes('k'))SFX.castle();else SFX.move();if(engine.isInCheck())setTimeout(()=>SFX.check(),120);setMoveTimes(prev => [...prev, null]);setMyTurn(true);refresh()}}break
       case 'RESIGN': setGoText('El rival se rindió'); setShowGO(true); SFX.gameOver(); break
-      case 'DRAW_OFFER': if(window.confirm('🤝 ¿Aceptas tablas?')){pm.current?.sendDrawAccept();setGoText('Tablas');setShowGO(true)}break
+      case 'DRAW_OFFER':
+        setPendingDrawFn(() => () => {
+          pm.current?.sendDrawAccept()
+          setGoText('Tablas')
+          setShowGO(true)
+          setShowDrawOffer(false)
+        })
+        setShowDrawOffer(true)
+        break
       case 'DRAW_ACCEPT': setGoText('Tablas'); setShowGO(true); break
       case 'CLOCK_SYNC':
         if (d.data) {
@@ -271,6 +423,8 @@ export default function Game() {
         break
     }
   }, [engine, refresh])
+
+  peerDataRef.current = peerData
 
   const makeAI = useCallback(async () => {
     if (!ai.current) {ai.current=new AIPlayer(aiDiff);await ai.current.init()}
@@ -311,26 +465,125 @@ export default function Game() {
     setAiThk(false)
   }, [engine, aiDiff, refresh])
 
+  makeAIRef.current = makeAI
+
   // Click en casilla
+  // ─── Navigate to a specific move in history ───
+  const navigateToMove = useCallback((idx) => {
+    if (hist.length === 0) return
+    // Clamp
+    const clamped = Math.max(-1, Math.min(idx, hist.length - 1))
+    setViewingMove(clamped)
+
+    if (clamped === -1) {
+      // Return to current position — restore from engine's current state
+      refresh()
+    } else {
+      // Replay moves up to the selected index from the start
+      const savedEngine = new ChessEngine()
+      savedEngine.reset()
+      for (let i = 0; i <= clamped; i++) {
+        const m = hist[i]
+        savedEngine.move(m.from, m.to, m.promotion)
+      }
+      const b = savedEngine.getBoard()
+      const t = savedEngine.getTurn()
+      let ck = []
+      if (savedEngine.isInCheck()) {
+        for (let r=0;r<8;r++) for (let c=0;c<8;c++) if (b[r][c]?.type==='k' && b[r][c]?.color===t) ck.push(String.fromCharCode(97+c)+(8-r))
+      }
+      setBrd(b)
+      setTurn(t)
+      setChk(ck)
+      setLastM(hist[clamped])
+      setSel(null)
+      setLegal([])
+      setCapturableSq([])
+    }
+  }, [hist, refresh])
+
+  // ─── Get hint from AI ───
+  const getHint = useCallback(async () => {
+    if (!vsPC || aiThk || (status !== 'PLAYING' && status !== 'CHECK')) return
+    // Clear previous hint after 5s
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
+
+    // Resolve AI player if not ready
+    if (!ai.current) {
+      ai.current = new AIPlayer(aiDiff)
+      await ai.current.init()
+    }
+
+    try {
+      const best = await ai.current.getBestMove(engine.getFEN())
+      if (best) {
+        setHintMove({ from: best.from, to: best.to })
+        SFX.hover()
+        hintTimerRef.current = setTimeout(() => setHintMove(null), 5000)
+      }
+    } catch (e) {
+      console.warn('Hint failed:', e)
+    }
+  }, [vsPC, aiThk, status, aiDiff, engine])
+
   const clickSq = useCallback((sq) => {
-    if (!myTurn && !solo) return
-    if ((status !== 'PLAYING' && status !== 'CHECK') || aiThk || promo) return
+    // Block moves while viewing history or game not active
+    if ((status !== 'PLAYING' && status !== 'CHECK') || aiThk || promo || isViewingHistory) return
+
+    // Clear hint on any click
+    if (hintMove) setHintMove(null)
 
     const p = engine.getPiece(sq)
+    const isMyPiece = p && premoveEnabled
+      ? p.color === pColor
+      : p && own(p)
 
+    // ── PREMOVE: cuando no es mi turno ──
+    if (!myTurn && !solo && premoveEnabled) {
+      if (premoveSrc) {
+        if (sq === premoveSrc) {
+          setPremoveSrc(null)
+          setPremove(null)
+          SFX.error()
+          return
+        }
+        setPremove({ from: premoveSrc, to: sq })
+        setPremoveSrc(null)
+        return
+      }
+      if (isMyPiece) {
+        setPremoveSrc(sq)
+        return
+      }
+      if (premove && sq === premove.to) {
+        setPremove(null)
+        setPremoveSrc(null)
+        return
+      }
+      return
+    }
+
+    if (!myTurn && !solo) return
+
+    // ── NORMAL: cuando es mi turno ──
     if (sel) {
-      if (sel === sq) { setSel(null); setLegal([]); return }
+      if (sel === sq) { setSel(null); setLegal([]); setCapturableSq([]); return }
       if (legal.some(m => m.to === sq)) { doMove(sel, sq); return }
       if (p && own(p)) { setSel(sq); setLegal(engine.getLegalMoves(sq).map(m=>({...m,to:m.to,from:m.from}))); return }
-      // Click en casilla no legal → sonido error
       SFX.error()
       setSel(null); setLegal([]); return
     }
 
     if (p && own(p)) {
-      setSel(sq); setLegal(engine.getLegalMoves(sq).map(m=>({...m,to:m.to,from:m.from})))
+      const moves = engine.getLegalMoves(sq).map(m=>({...m,to:m.to,from:m.from}))
+      setSel(sq); setLegal(moves)
+      // Compute capturable squares
+      const captures = moves.filter(m => engine.getPiece(m.to))
+      setCapturableSq(captures.map(m => m.to))
+    } else {
+      setCapturableSq([])
     }
-  }, [sel, legal, myTurn, solo, status, aiThk, promo, engine, pColor, online])
+  }, [sel, legal, myTurn, solo, status, aiThk, promo, engine, pColor, online, premove, premoveSrc, premoveEnabled])
 
   const own = (p) => {
     const cur = engine.getTurn()
@@ -341,10 +594,19 @@ export default function Game() {
 
   // Drop
   const drop = useCallback((from, to) => {
+    if ((status !== 'PLAYING' && status !== 'CHECK') || aiThk || promo || isViewingHistory) return
+
+    if (hintMove) setHintMove(null)
+
+    // Premove via drag
+    if (!myTurn && !solo && premoveEnabled) {
+      setPremove({ from, to })
+      return
+    }
+
     if (!myTurn && !solo) return
-    if ((status !== 'PLAYING' && status !== 'CHECK') || aiThk || promo) return
     doMove(from, to)
-  }, [myTurn, solo, status, aiThk, promo])
+  }, [myTurn, solo, status, aiThk, promo, premoveEnabled, hintMove])
 
   // Ejecutar movimiento
   const doMove = (from, to, prom = null) => {
@@ -385,6 +647,11 @@ export default function Game() {
     const te = new ChessEngine(); te.loadFEN(engine.getFEN())
     if (te.isInCheck()) setTimeout(() => SFX.check(), 120)
     setSel(null); setLegal([])
+    setCapturableSq([])
+    setHintMove(null)
+    // Save FEN for navigation (store after this move)
+    fenHistoryRef.current.push(engine.getFEN())
+    setViewingMove(-1)
     // Record move time
     if (moveStartRef.current) {
       const elapsed = (Date.now() - moveStartRef.current) / 1000
@@ -416,9 +683,9 @@ export default function Game() {
     clockRef.current?.resetClock()
     syncClock(time, increment)
   }
-  const newGame = () => { aiCancelRef.current = true; engine.reset(); setFlip(pColor === 'b' ? false : false); setSel(null); setLegal([]); setLastM(null); setChk([]); setStatus('PLAYING'); setShowGO(false); setGoText(''); setMyTurn(true); setAiThk(false); setPromo(null); setClockRunning(false); setMoveTimes([]); setEvalHistory([]); moveStartRef.current = Date.now(); clockRef.current?.resetClock(); refresh(); SFX.gameStart() }
+  const newGame = () => { aiCancelRef.current = true; engine.reset(); setFlip(false); setSel(null); setLegal([]); setPremove(null); setPremoveSrc(null); setLastM(null); setChk([]); setStatus('PLAYING'); setShowGO(false); setGoText(''); setMyTurn(true); setAiThk(false); setPromo(null); setHintMove(null); setCapturableSq([]); fenHistoryRef.current = []; setViewingMove(-1); setClockRunning(false); setMoveTimes([]); setEvalHistory([]); moveStartRef.current = Date.now(); clockRef.current?.resetClock(); refresh(); SFX.gameStart() }
   const goHome = () => { aiCancelRef.current = true; try { pm.current?.disconnect() } catch(e) {}; nav('/') }
-  const undo = () => { if (!local || hist.length===0 || aiThk) return; aiCancelRef.current = true; engine.undo(); if (vsPC && hist.length >= 2) engine.undo(); setMoveTimes(prev => prev.slice(0, vsPC ? -2 : -1)); setEvalHistory(prev => prev.slice(0, prev.length - (vsPC ? 2 : 1))); moveStartRef.current = Date.now(); refresh(); setMyTurn(true); setAiThk(false); setPromo(null); SFX.undo() }
+  const undo = () => { if (!local || hist.length===0 || aiThk) return; aiCancelRef.current = true; engine.undo(); if (vsPC && hist.length >= 2) engine.undo(); setMoveTimes(prev => prev.slice(0, vsPC ? -2 : -1)); setEvalHistory(prev => prev.slice(0, prev.length - (vsPC ? 2 : 1))); fenHistoryRef.current = fenHistoryRef.current.slice(0, vsPC ? -2 : -1); setViewingMove(-1); moveStartRef.current = Date.now(); refresh(); setMyTurn(true); setAiThk(false); setPromo(null); setPremove(null); setPremoveSrc(null); setHintMove(null); setCapturableSq([]); SFX.undo() }
 
   const lastSAN = hist.length > 0 ? hist[hist.length-1].san : null
   const mIcon = blind?'🕶️':vsPC?'🤖':solo?'🧠':'👥'
@@ -459,6 +726,19 @@ export default function Game() {
     setGoText(`Tiempo. ${winner} ganan.`)
     setShowGO(true)
     SFX.gameOver()
+  }, [])
+
+  // ─── Accept draw from modal ───
+  const acceptDraw = useCallback(() => {
+    if (pendingDrawFn) pendingDrawFn()
+    setShowDrawOffer(false)
+    setPendingDrawFn(null)
+  }, [pendingDrawFn])
+
+  const declineDraw = useCallback(() => {
+    setShowDrawOffer(false)
+    setPendingDrawFn(null)
+    // Could send decline message here if needed
   }, [])
 
   // ─── PGN Export ───
@@ -572,9 +852,26 @@ export default function Game() {
           {aiThk && <span className="gthink">🤔</span>}
         </div>
         <div className="gbr">
-          {vsPC && mode==='pc-levels' && <button className="gicn" onClick={()=>setShowDiff(true)} title="Dificultad">🎯</button>}
+          {online && (
+            <>
+              <span className="gcolor-indicator" title={`Tus piezas: ${pColor === 'w' ? 'Blancas' : 'Negras'}`}>
+                <ChessPiece color={pColor} type="k" />
+                <span className="gcolor-label">{pColor === 'w' ? 'Blancas' : 'Negras'}</span>
+              </span>
+              <span className={`gstatus ${onlineStatus === 'connected' ? 'gstatus-ok' : onlineStatus === 'reconnecting' ? 'gstatus-warn' : 'gstatus-err'}`} title={{
+                connected: 'Conectado',
+                reconnecting: 'Reconectando...',
+                lost: 'Conexión perdida'
+              }[onlineStatus]}>
+                {onlineStatus === 'connected' ? '🟢' : onlineStatus === 'reconnecting' ? '🟡' : '🔴'}
+              </span>
+            </>
+          )}
+          {vsPC && <button className="gicn" onClick={()=>setShowDiff(true)} title="Dificultad">🎯</button>}
+          {vsPC && <button className={`gicn ${hintMove ? 'gicn-hint' : ''}`} onClick={() => { if (hintMove) setHintMove(null); else getHint() }} title={hintMove ? 'Quitar pista' : 'Pista (H)'}>{hintMove ? '✨' : '💡'}</button>}
+          {premoveEnabled && <button className={`gicn ${premove ? 'gicn-prem' : ''}`} onClick={() => { setPremove(null); setPremoveSrc(null) }} title={premove ? `Premove: ${premove.from}→${premove.to} (toca para cancelar)` : 'Premove'}>{premove ? '⏭' : '⏩'}</button>}
           <button className="gicn" onClick={()=>setShowClockSelect(true)} title={online && !isHost ? 'Solo el anfitrión puede cambiar el tiempo' : 'Reloj'} disabled={online && !isHost}>⏱️</button>
-          <button className="gicn" onClick={()=>{const m=toggleMute();setMuted(m)}} title={muted?'Activar sonido':'Silenciar'}>{muted?'🔇':'🔊'}</button>
+          <button className={`gicn ${muted?'gicn-muted':''}`} onClick={()=>{const m=toggleMute();setMuted(m)}} title={muted?'Activar sonido':'Silenciar'}>{muted ? '🔇' : volume < 0.33 ? '🔈' : volume < 0.66 ? '🔉' : '🔊'}</button>
           <button className="gicn" onClick={()=>setFlip(!flip)} title="Girar">{flip?'⬇':'🔄'}</button>
           <button className="gicn" onClick={()=>setShowThemeSelect(true)} title="Tema del tablero">🎨</button>
           <button className="gicn" onClick={() => setShowCustomSelect(true)} title="Personalización completa">⚙️</button>
@@ -641,6 +938,10 @@ export default function Game() {
               isSelectable={myTurn||solo}
               isCheckmate={status === 'CHECKMATE'}
               boardTheme={boardTheme}
+              premove={premove}
+              premoveSrc={premoveSrc}
+              hintMove={isViewingHistory ? null : hintMove}
+              capturableSq={capturableSq}
             />
 
             {/* Barra promoción */}
@@ -723,10 +1024,21 @@ export default function Game() {
             {lastSAN ? <><span className="glbl">Último</span><strong>{lastSAN}</strong></> : <span className="glbl">—</span>}
           </div>
 
+          {/* Navegación de jugadas */}
+          {hist.length > 0 && (
+            <div className="gnav">
+              <button className="gnav-btn" onClick={() => navigateToMove(-1)} title="Ir al final (posición actual)" disabled={!isViewingHistory}>⏭</button>
+              <button className="gnav-btn" onClick={() => navigateToMove(viewingMove + 1)} title="Siguiente jugada" disabled={viewingMove >= hist.length - 1}>⏩</button>
+              <span className="gnav-pos">{isViewingHistory ? viewingMove + 1 : hist.length}/{hist.length}</span>
+              <button className="gnav-btn" onClick={() => navigateToMove(viewingMove - 1)} title="Jugada anterior" disabled={viewingMove <= 0}>⏪</button>
+              <button className="gnav-btn" onClick={() => navigateToMove(0)} title="Ir al inicio" disabled={viewingMove <= 0}>⏮</button>
+            </div>
+          )}
+
           {/* Controles rápidos */}
           <div className="gacts">
-            {local && <button className="gact" onClick={undo} disabled={hist.length===0} title="Deshacer">↩</button>}
-            <button className="gact" onClick={newGame} title="Nueva partida">🔄</button>
+            {local && !isViewingHistory && <button className="gact" onClick={undo} disabled={hist.length===0} title="Deshacer (Ctrl+Z)">↩</button>}
+            <button className="gact" onClick={newGame} title="Nueva partida (N)">🔄</button>
             <button className="gact" onClick={downloadPGN} disabled={hist.length===0} title="Exportar PGN">📋</button>
             {online && <button className="gact gact-chat" onClick={()=>setChatOpen(!chatOpen)} title="Chat">💬 {chatMsgs.length > 0 && !chatOpen && <span className="chat-dot" />}</button>}
           {online && <button className="gact gact-d" onClick={drawOffer} title="Ofrecer tablas">🤝</button>}
@@ -811,6 +1123,23 @@ export default function Game() {
         </div>
       )}
 
+      {/* ═══ MODAL OFERTA DE TABLAS (reemplaza window.confirm) ═══ */}
+      {showDrawOffer && (
+        <div className="mover" onClick={declineDraw}>
+          <div className="min" onClick={e => e.stopPropagation()} style={{ textAlign: 'center', maxWidth: '280px' }}>
+            <div style={{ fontSize: '2.2rem', marginBottom: '6px' }}>🤝</div>
+            <h3 style={{ fontSize: '1rem', marginBottom: '6px' }}>Oferta de tablas</h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+              Tu oponente ha ofrecido tablas
+            </p>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+              <button className="btnp" onClick={acceptDraw}>✅ Aceptar</button>
+              <button className="btng" onClick={declineDraw}>❌ Rechazar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══ MODAL DIFICULTAD ═══ */}
       {showDiff && (
         <div className="mover" onClick={()=>setShowDiff(false)}>
@@ -881,9 +1210,35 @@ export default function Game() {
               </div>
             </div>
 
+            {/* Volumen */}
+            <div className="pz-filter-section">
+              <span className="pz-filter-label">Volumen</span>
+              <div className="vol-slider-wrap">
+                <span className="vol-icon">{volume === 0 ? '🔇' : volume < 0.33 ? '🔈' : volume < 0.66 ? '🔉' : '🔊'}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={muted ? 0 : volume}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value)
+                    setVolume(v)
+                    setSFXVolume(v)
+                    if (v > 0 && muted) {
+                      const m = toggleMute()
+                      setMuted(m)
+                    }
+                  }}
+                  className="vol-slider"
+                />
+                <span className="vol-pct">{Math.round((muted ? 0 : volume) * 100)}%</span>
+              </div>
+            </div>
+
             {/* Guardar */}
             <button className="pz-apply" onClick={() => {
-              saveCustomizationConfig({ boardTheme, ambientTheme, soundProfile, pieceStyle: 'standard', animations: true })
+              saveCustomizationConfig({ boardTheme, ambientTheme, soundProfile, pieceStyle: 'standard', animations: true, volume })
               setShowCustomSelect(false)
             }} style={{ marginTop: '4px' }}>
               💾 Guardar configuración
