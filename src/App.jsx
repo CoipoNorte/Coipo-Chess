@@ -5,6 +5,7 @@ import Lobby from './components/Lobby'
 import Game from './components/Game'
 import Puzzle from './components/Puzzle'
 import ErrorBoundary from './components/ErrorBoundary'
+import { getCustomizationConfig } from './utils/customization'
 import './App.css'
 
 /* ─── Sidebar: categorías con sus modos ─── */
@@ -40,7 +41,19 @@ function App() {
   const [open, setOpen] = useState(true)
   const [mobile, setMobile] = useState(false)
 
+  const [boardSize, setBoardSize] = useState(() => getCustomizationConfig().boardSize || 'auto')
+
   useEffect(() => { setMobile(false) }, [loc.pathname])
+
+  // Listen for customization changes
+  useEffect(() => {
+    const handler = () => {
+      const cfg = getCustomizationConfig()
+      setBoardSize(cfg.boardSize || 'auto')
+    }
+    window.addEventListener('coipo-config-changed', handler)
+    return () => window.removeEventListener('coipo-config-changed', handler)
+  }, [])
 
   /* Detecta ruta activa — también coincide /game/:mode con su lobby correspondiente */
   const isActive = (path) => {
@@ -129,7 +142,7 @@ function App() {
       </button>
 
       {/* ─── Contenido principal ─── */}
-      <main className="main">
+      <main className={`main ${boardSize && boardSize !== 'auto' ? `board-size-${boardSize}` : ''}`}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/lobby/:mode" element={<Lobby />} />

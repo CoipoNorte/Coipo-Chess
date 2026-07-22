@@ -18,6 +18,9 @@ function Board({
   isSelectable = true,
   isCheckmate = false,
   boardTheme = 'classic',
+  pieceSet = 'cburnett',
+  customPiecePath = '',
+  showCoordinates = true,
   premove = null,
   premoveSrc = null,
   hintMove = null,
@@ -436,8 +439,8 @@ function Board({
                       }}
                     >
                       {p._hidden
-                        ? <ChessPiece color={p.color} type="p" />
-                        : <ChessPiece color={p.color} type={p.type} />
+                        ? <ChessPiece color={p.color} type="p" pieceSet={pieceSet} customPath={customPiecePath} />
+                        : <ChessPiece color={p.color} type={p.type} pieceSet={pieceSet} customPath={customPiecePath} />
                       }
                     </span>
                   )}
@@ -451,9 +454,9 @@ function Board({
                     <span className="lm lmp" />
                   )}
 
-                  {/* Coordenadas estilo Lichess — usando índices visuales */}
-                  {isBottomRow && <span className="sq-file">{FILES[isWhite ? cIdx : 7 - cIdx]}</span>}
-                  {isLeftCol && <span className="sq-rank">{RANKS[isWhite ? rIdx : 7 - rIdx]}</span>}
+              {/* Coordenadas estilo Lichess — usando índices visuales */}
+              {showCoordinates && isBottomRow && <span className="sq-file">{FILES[isWhite ? cIdx : 7 - cIdx]}</span>}
+              {showCoordinates && isLeftCol && <span className="sq-rank">{RANKS[isWhite ? rIdx : 7 - rIdx]}</span>}
                 </div>
               )
             })}
@@ -476,7 +479,7 @@ function Board({
             style={{ left, top }}
           >
             <span className={`pce ${captureAnim.color === 'w' ? 'pw' : 'pb'}`}>
-              <ChessPiece color={captureAnim.color} type={captureAnim.type} />
+              <ChessPiece color={captureAnim.color} type={captureAnim.type} pieceSet={pieceSet} customPath={customPiecePath} />
             </span>
           </div>
         )
@@ -509,7 +512,7 @@ function Board({
           }}
         >
           <span className={`pce ${drag.piece.color === 'w' ? 'pw' : 'pb'}`}>
-            <ChessPiece color={drag.piece.color} type={drag.piece.type} />
+            <ChessPiece color={drag.piece.color} type={drag.piece.type} pieceSet={pieceSet} customPath={customPiecePath} />
           </span>
         </div>
       )}

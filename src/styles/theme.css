@@ -73,6 +73,13 @@
   --shadow-glow-gold:  0 0 20px rgba(255, 215, 0, 0.15);
 }
 
+/* ═══ Board Size Presets ═══ */
+.board-size-compact { --board-size: 360px !important; }
+.board-size-medium { --board-size: 440px !important; }
+.board-size-large { --board-size: 520px !important; }
+.board-size-xlarge { --board-size: 600px !important; }
+/* board-size-auto uses the default responsive values below */
+
 /* Responsive global */
 @media (max-width: 1024px) {
   :root {

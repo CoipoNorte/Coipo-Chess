@@ -5,12 +5,13 @@ import AIPlayer from '../utils/aiPlayer'
 import { obfuscateBoard } from '../utils/blindMode'
 import { resolveBoardOrientation } from '../utils/boardOrientation'
 import Board from './Board'
-import { ChessPiece } from './ChessPieces'
+import { ChessPiece, CustomPieceProvider } from './ChessPieces'
+import AppearanceSettings from './AppearanceSettings'
 import ChessClock from './ChessClock'
 import EvalGraph from './EvalGraph'
 import * as SFX from '../utils/sounds'
 import { toggleMute, setVolume as setSFXVolume, setProfile as setSFXProfile } from '../utils/sounds'
-import { getCustomizationConfig, BOARD_THEMES, AMBIENT_THEMES, SOUND_PROFILES, saveCustomizationConfig } from '../utils/customization'
+import { getCustomizationConfig, saveCustomizationConfig } from '../utils/customization'
 import './Game.css'
 
 const PV = { q:9, r:5, b:3, n:3, p:1 }
@@ -53,7 +54,6 @@ export default function Game() {
   const [aiDiff, setAiDiff] = useState('medium')
   const [showDiff, setShowDiff] = useState(false)
   const [showGO, setShowGO] = useState(false)
-  const [showThemeSelect, setShowThemeSelect] = useState(false)
   const [showCustomSelect, setShowCustomSelect] = useState(false)
 
   const [goText, setGoText] = useState('')
@@ -61,6 +61,8 @@ export default function Game() {
   const [ambientTheme, setAmbientTheme] = useState('none')
   const [soundProfile, setSoundProfile] = useState('wood')
   const [boardTheme, setBoardTheme] = useState(() => localStorage.getItem('coipo-board-theme') || 'classic')
+  const [pieceSet, setPieceSet] = useState(() => getCustomizationConfig().pieceSet || 'cburnett')
+  const [customPiecePath, setCustomPiecePath] = useState(() => getCustomizationConfig().customPiecePath || '')
   const [blindBrd, setBlindBrd] = useState(null)
   const boardFlipped = resolveBoardOrientation(pColor, flip)
   const [promo, setPromo] = useState(null) // { from, to }
@@ -123,7 +125,6 @@ export default function Game() {
       // Escape always works
       if (e.key === 'Escape') {
         if (showGO) setShowGO(false)
-        else if (showThemeSelect) setShowThemeSelect(false)
         else if (showClockSelect) setShowClockSelect(false)
         else if (showDiff) setShowDiff(false)
         else if (showCustomSelect) setShowCustomSelect(false)
@@ -169,7 +170,7 @@ export default function Game() {
     }
     window.addEventListener('keydown', handleKeys)
     return () => window.removeEventListener('keydown', handleKeys)
-  }, [showGO, showThemeSelect, showClockSelect, showDiff, showCustomSelect, chatOpen, premove, premoveSrc, hintMove, vsPC, aiThk, local, status])
+  }, [showGO, showClockSelect, showDiff, showCustomSelect, chatOpen, premove, premoveSrc, hintMove, vsPC, aiThk, local, status])
 
   // Init
   useEffect(() => {
@@ -214,6 +215,8 @@ export default function Game() {
     // Cargar configuración de personalización modular
     const customConfig = getCustomizationConfig()
     setBoardTheme(customConfig.boardTheme || 'classic')
+    setPieceSet(customConfig.pieceSet || 'cburnett')
+    setCustomPiecePath(customConfig.customPiecePath || '')
     setSoundProfile(customConfig.soundProfile || 'wood')
     setAmbientTheme(customConfig.ambientTheme || 'none')
     setSoundProfile(customConfig.soundProfile || 'wood')
@@ -825,6 +828,7 @@ export default function Game() {
   const pColor2 = turn === 'w' ? 'w' : 'b'
 
   return (
+    <CustomPieceProvider pieceSet={pieceSet} customPath={customPiecePath}>
     <div className="game">
       {/* ═══ TOP BAR ═══ */}
       <div className="gbar">
@@ -928,6 +932,8 @@ export default function Game() {
               isSelectable={myTurn||solo}
               isCheckmate={status === 'CHECKMATE'}
               boardTheme={boardTheme}
+              pieceSet={pieceSet}
+              customPiecePath={customPiecePath}
               premove={premove}
               premoveSrc={premoveSrc}
               hintMove={isViewingHistory ? null : hintMove}
@@ -1152,89 +1158,21 @@ export default function Game() {
         </div>
       )}
 
-      {/* ═══ MODAL PERSONALIZACIÓN COMPLETA ═══ */}
+      {/* ═══ MODAL APARIENCIA ═══ */}
       {showCustomSelect && (
-        <div className="mover" onClick={() => setShowCustomSelect(false)}>
-          <div className="min" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px', width: '92%' }}>
-            <h3>⚙️ Personalización completa</h3>
-            <div style={{ marginBottom: '14px', fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-              Totalmente modular — ideal para futuros mods gráficos
-            </div>
-
-            {/* Tablero */}
-            <div className="pz-filter-section">
-              <span className="pz-filter-label">Tablero</span>
-              <div className="pz-filter-chips">
-                {BOARD_THEMES.map(t => (
-                  <button key={t.id} className={`pz-chip ${boardTheme === t.id ? 'pz-chip-active' : ''}`}
-                    onClick={() => { setBoardTheme(t.id); localStorage.setItem('coipo-board-theme', t.id); }}>
-                    {t.icon} {t.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Ambiente */}
-            <div className="pz-filter-section">
-              <span className="pz-filter-label">Ambiente</span>
-              <div className="pz-filter-chips">
-                {AMBIENT_THEMES.map(a => (
-                  <button key={a.id} className={`pz-chip ${ambientTheme === a.id ? 'pz-chip-active' : ''}`}
-                    onClick={() => setAmbientTheme(a.id)}>
-                    {a.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Sonido */}
-            <div className="pz-filter-section">
-              <span className="pz-filter-label">Perfil de sonido</span>
-              <div className="pz-filter-chips">
-                {SOUND_PROFILES.map(s => (
-                  <button key={s.id} className={`pz-chip ${soundProfile === s.id ? 'pz-chip-active' : ''}`}
-                    onClick={() => setSoundProfile(s.id)}>
-                    {s.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Volumen */}
-            <div className="pz-filter-section">
-              <span className="pz-filter-label">Volumen</span>
-              <div className="vol-slider-wrap">
-                <span className="vol-icon">{volume === 0 ? '🔇' : volume < 0.33 ? '🔈' : volume < 0.66 ? '🔉' : '🔊'}</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={muted ? 0 : volume}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value)
-                    setVolume(v)
-                    setSFXVolume(v)
-                    if (v > 0 && muted) {
-                      const m = toggleMute()
-                      setMuted(m)
-                    }
-                  }}
-                  className="vol-slider"
-                />
-                <span className="vol-pct">{Math.round((muted ? 0 : volume) * 100)}%</span>
-              </div>
-            </div>
-
-            {/* Guardar */}
-            <button className="pz-apply" onClick={() => {
-              saveCustomizationConfig({ boardTheme, ambientTheme, soundProfile, pieceStyle: 'standard', animations: true, volume })
-              setShowCustomSelect(false)
-            }} style={{ marginTop: '4px' }}>
-              💾 Guardar configuración
-            </button>
-          </div>
-        </div>
+        <AppearanceSettings
+          onClose={() => setShowCustomSelect(false)}
+          onApply={(cfg) => {
+            setBoardTheme(cfg.boardTheme)
+            setPieceSet(cfg.pieceSet)
+            setCustomPiecePath(cfg.customPiecePath || '')
+            setAmbientTheme(cfg.ambientTheme)
+            setSoundProfile(cfg.soundProfile)
+            setVolume(cfg.volume)
+            setSFXVolume(cfg.volume)
+            localStorage.setItem('coipo-board-theme', cfg.boardTheme)
+          }}
+        />
       )}
 
       {/* ═══ GAME OVER ═══ */}
@@ -1294,5 +1232,6 @@ export default function Game() {
         </div>
       )}
     </div>
+    </CustomPieceProvider>
   )
 }
